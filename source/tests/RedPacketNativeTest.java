@@ -58,6 +58,22 @@ public final class RedPacketNativeTest {
         open=new h6(1,1,"different",p.url,"","",p.talker,"v1.0","t","");
         constructed(api.openCtor,open,new Object[]{1,1,"different",p.url,"","",p.talker,"v1.0","t",""});
         callback(open,0,0);check(sink.opens==before,"manual/unrelated packets ignored");
+        RedPacketEngine.Packet personal=RedPacketEngine.parse("self","personal-peer",p.url,11);
+        RedPacketEngine.Attempt ownPersonal=new RedPacketEngine.Attempt(personal,true,10000);
+        api.open(ownPersonal,"token");open=(h6)zp0.j1.holder.b.last;open.h.n="";callback(open,0,0);
+        check(sink.r.requestVerified&&sink.r.idFromRequest&&sink.r.sendId.equals("id")&&sink.r.responseIdState.equals("missing"),"omitted personal response id uses verified request identity");
+        api.open(ownPersonal,"token");open=(h6)zp0.j1.holder.b.last;open.h.n="wrong";callback(open,0,0);
+        check(!sink.r.idFromRequest&&sink.r.sendId.equals("wrong")&&sink.r.responseIdState.equals("mismatch"),"conflicting nonempty response id never replaced");
+        for(int kind=0;kind<2;kind++){
+            api.open(ownPersonal,"token");open=(h6)zp0.j1.holder.b.last;open.h.n="";if(kind==0)open.i="wrong";else open.m="different-url";callback(open,0,0);
+            check(!sink.r.requestVerified&&!sink.r.idFromRequest&&sink.r.sendId.isEmpty(),"changed native request input blocks identity fallback "+kind);
+        }
+        api.open(a,"token");open=(h6)zp0.j1.holder.b.last;open.h.n="";callback(open,0,0);
+        check(!sink.r.idFromRequest&&sink.r.sendId.isEmpty(),"group response identity requirement preserved");
+        api.open(ownPersonal,"token");callback(zp0.j1.holder.b.last,4,-2000);
+        check(sink.r.error!=0&&sink.r.networkType==4&&sink.r.networkCode==-2000&&!sink.r.detailPresent,"native transport codes retained without inferring success");
+        open=new h6(1,1,"id",p.url,"","",personal.talker,"v1.0","t","");open.h.n="";before=sink.opens;callback(open,0,0);
+        check(sink.opens==before,"untracked personal callback cannot use fallback");
         api.query(a);Object forgotten=zp0.j1.holder.b.last;api.forget(a);before=sink.queries;callback(forgotten,0,0);
         check(sink.queries==before && api.requests.isEmpty(),"timeout cleanup removes scene ownership");
         zp0.j1.holder.b.accepted=false;

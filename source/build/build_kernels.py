@@ -1,4 +1,4 @@
-"""Build and verify v230 kernels; signing is optional. Never deploy or change the APK."""
+"""Build and verify v238 kernels; signing is optional. Never deploy or change the APK."""
 from pathlib import Path
 import sys,subprocess,zipfile,json,hashlib,re,base64,os,uuid,argparse
 ROOT=Path(__file__).resolve().parents[1]
@@ -87,6 +87,14 @@ panel_tests=OUT/'plus-panel-test-classes';panel_tests.mkdir()
 panel_fixtures=list((ROOT/'tests/recallmark-ui-fixtures/android').rglob('*.java'))
 run([JAVAC,'-encoding','UTF-8','-source','8','-target','8','-nowarn','-d',panel_tests,*panel_fixtures,ROOT/'kernel/PlusPanelLayout.java',ROOT/'tests/PlusPanelLayoutTest.java'])
 checks['plus_panel_live_presence_and_recovery']=run([JAVA,'-cp',panel_tests,'com.zafiro.wxentry.kernel.PlusPanelLayoutTest']);print(checks['plus_panel_live_presence_and_recovery'],flush=True)
+tablet_tests=OUT/'tablet-mode-test-classes';tablet_tests.mkdir()
+tablet_fixtures=list((ROOT/'tests/tablet-fixtures').rglob('*.java'))+[ROOT/'tests/runtime-fixtures/android/util/AtomicFile.java']+[ROOT/'tests/fixtures/de/robv/android/xposed'/n for n in ['XposedBridge.java','XC_MethodHook.java']]
+run([JAVAC,'-encoding','UTF-8','-source','8','-target','8','-nowarn','-d',tablet_tests,*tablet_fixtures,ROOT/'loader/TabletModeStore.java',ROOT/'loader/TabletModeHooks.java',ROOT/'loader/WechatRestartPlan.java',ROOT/'tests/TabletModeTest.java',ROOT/'tests/WechatRestartPlanTest.java'])
+checks['tablet_early_boot_and_disable']=run([JAVA,'-cp',tablet_tests,'com.zafiro.wxentry.TabletModeTest',OUT]);print(checks['tablet_early_boot_and_disable'],flush=True)
+checks['tablet_restart_scheduling']=run([JAVA,'-cp',tablet_tests,'com.zafiro.wxentry.WechatRestartPlanTest']);print(checks['tablet_restart_scheduling'],flush=True)
+paid_tests=OUT/'tablet-paid-test-classes';paid_tests.mkdir()
+run([JAVAC,'-encoding','UTF-8','-source','8','-target','8','-nowarn','-d',paid_tests,*[ROOT/'loader'/n for n in ['KernelDelivery.java','EditionPolicy.java','TabletEntitlement.java']],ROOT/'tests/TabletEntitlementTest.java'])
+checks['tablet_signed_paid_entitlement']=run([JAVA,'-cp',paid_tests,'com.zafiro.wxentry.TabletEntitlementTest',OUT]);print(checks['tablet_signed_paid_entitlement'],flush=True)
 baseline=args.baseline_dir
 for name in ['VoiceRecallRuntime.java','ImageRecallRuntime.java','RecallImageCache.java','VoiceForwardRuntime.java','VoiceForwardSender.java','VoiceForwardPicker.java','VoiceForwardTargets.java','VoiceForwardQueue.java','VoiceForwardIcon.java','VoiceForwardLayout.java']:
     assert (ROOT/'kernel'/name).read_bytes()==(baseline/'kernel'/name).read_bytes()
@@ -107,11 +115,11 @@ print(checks['redpacket_settings_reply_flow'],flush=True)
 for cls,name in [('ReceiptTest','receipt_lists_seconds_and_migration'),('TransferTest','transfer_native_receive_flow')]:
     checks[name]=run([JAVA,'-Dwxentry.test.dir='+str(OUT/cls),'-cp',runtime_tests,'com.zafiro.wxentry.kernel.'+cls]);print(checks[name],flush=True)
 if args.native_apk:
-    run([JAVAC,'-encoding','UTF-8','-cp',LIBS/'jadx-all.jar','-d',tests,ROOT/'tests/NativeVoiceContractCheck.java',ROOT/'tests/NativeRedPacketContractCheck.java',ROOT/'tests/NativeTransferContractCheck.java',ROOT/'tests/NativeRecallTipContractCheck.java'])
-    for cls,name in [('NativeVoiceContractCheck','native_voice_contracts'),('NativeRedPacketContractCheck','native_redpacket_contracts'),('NativeTransferContractCheck','native_transfer_contracts'),('NativeRecallTipContractCheck','native_recall_message_allocator')]:
+    run([JAVAC,'-encoding','UTF-8','-cp',LIBS/'jadx-all.jar','-d',tests,ROOT/'tests/NativeVoiceContractCheck.java',ROOT/'tests/NativeRedPacketContractCheck.java',ROOT/'tests/NativeTransferContractCheck.java',ROOT/'tests/NativeRecallTipContractCheck.java',ROOT/'tests/NativeTabletContractCheck.java'])
+    for cls,name in [('NativeVoiceContractCheck','native_voice_contracts'),('NativeRedPacketContractCheck','native_redpacket_contracts'),('NativeTransferContractCheck','native_transfer_contracts'),('NativeRecallTipContractCheck','native_recall_message_allocator'),('NativeTabletContractCheck','native_tablet_login_contracts')]:
         checks[name]=run([JAVA,'-cp',str(tests)+os.pathsep+str(LIBS/'jadx-all.jar'),cls,args.native_apk]);print(checks[name],flush=True)
 run([JAVAC,'-encoding','UTF-8','-cp',LIBS/'jadx-all.jar','-d',tests,ROOT/'tests/DexEditionCheck.java'])
-report={'version':'230','apk_target_version':'1.91','checks':checks,'editions':{},'phone_tested':False,'production_deployed':False,'signed':bool(args.signing_key)}
+report={'version':'238','apk_target_version':'1.97','checks':checks,'editions':{},'phone_tested':False,'production_deployed':False,'signed':bool(args.signing_key)}
 if args.native_apk:report['native_apk_sha256']=hashlib.sha256(args.native_apk.read_bytes()).hexdigest()
 for edition in ['free','plus','vip']:
     dex=compile_dex(edition);plain=dex.read_bytes();digest=hashlib.sha256(plain).hexdigest()
@@ -122,18 +130,18 @@ for edition in ['free','plus','vip']:
         continue
     pad=PKCS7(128).padder();padded=pad.update(plain)+pad.finalize()
     enc=Cipher(algorithms.AES(key),modes.CBC(iv)).encryptor();encrypted=enc.update(padded)+enc.finalize()
-    signed=('kernel-v2|'+edition+'|230|'+digest).encode()
+    signed=('kernel-v2|'+edition+'|238|'+digest).encode()
     sig=signer.sign(signed,padding.PKCS1v15(),hashes.SHA256())
     public.verify(sig,signed,padding.PKCS1v15(),hashes.SHA256())
     dec=Cipher(algorithms.AES(key),modes.CBC(iv)).decryptor();decrypted=dec.update(encrypted)+dec.finalize()
     unpad=PKCS7(128).unpadder();assert unpad.update(decrypted)+unpad.finalize()==plain
     publish=OUT/'server-release/kernels'/edition;publish.mkdir(parents=True)
     (publish/'kernel.enc').write_bytes(encrypted)
-    (publish/'kernel.json').write_text(json.dumps({'protocol':2,'edition':edition,'v':'230','sha256':digest,'enc_sha256':hashlib.sha256(encrypted).hexdigest(),'sig':base64.b64encode(sig).decode()},indent=2)+'\n')
+    (publish/'kernel.json').write_text(json.dumps({'protocol':2,'edition':edition,'v':'238','sha256':digest,'enc_sha256':hashlib.sha256(encrypted).hexdigest(),'sig':base64.b64encode(sig).decode()},indent=2)+'\n')
     if edition=='free':
-        legacy_signature=signer.sign(('230|'+digest).encode(),padding.PKCS1v15(),hashes.SHA256())
-        public.verify(legacy_signature,('230|'+digest).encode(),padding.PKCS1v15(),hashes.SHA256())
-        (publish/'legacy.json').write_text(json.dumps({'v':'230','sha256':digest,'sig':base64.b64encode(legacy_signature).decode()},indent=2)+'\n')
+        legacy_signature=signer.sign(('238|'+digest).encode(),padding.PKCS1v15(),hashes.SHA256())
+        public.verify(legacy_signature,('238|'+digest).encode(),padding.PKCS1v15(),hashes.SHA256())
+        (publish/'legacy.json').write_text(json.dumps({'v':'238','sha256':digest,'sig':base64.b64encode(legacy_signature).decode()},indent=2)+'\n')
     report['editions'][edition]={'dex':str(dex),'publish':str(publish),'sha256':digest,'bytes':len(plain),'check':message,'signature_verified':True}
     print(message,flush=True)
 assert len(set(x['sha256'] for x in report['editions'].values()))==3

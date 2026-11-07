@@ -1,4 +1,4 @@
-"""Sign 1.91 using the original certificate and prepare a forward-version APK rollback."""
+"""Sign 1.97 using the original certificate and prepare a forward-version APK rollback."""
 from pathlib import Path
 import ast,struct,subprocess,json,zipfile,hashlib,re,sys,uuid,urllib.request
 R=Path(__file__).resolve().parents[1];W=R.parent;OLD=Path(r'C:\Users\Q\Documents\Codex\2026-11-03\new-chat\work')
@@ -22,30 +22,20 @@ expected=re.search(r'EXPECTED_SIG\s*=\s*"([a-f0-9]+)"',(R/'loader/Main.java').re
 cert=run([JAVA/'java.exe','-jar',BT/'lib/apksigner.jar','verify','--print-certs',baseline],'baseline-cert')
 assert re.search('certificate SHA-256 digest: '+expected,cert)
 alias=re.search(r'--ks-key-alias\s+[\'"]?([A-Za-z0-9_.-]+)',(signing/'sign_apk.sh').read_text(encoding="utf-8")).group(1)
-keypass=OUT/'key-password-private.txt';keypass.write_bytes((signing/'pass.txt').read_bytes())
 source=ast.parse((OLD/'wxentry-hotupdate-v194/build/repack_apk.py').read_text(encoding='utf-8'))
 function=next(n for n in source.body if isinstance(n,ast.FunctionDef) and n.name=='patch_manifest')
 patch=ast.unparse(function).replace('def patch_manifest(raw):','def patch_manifest(raw,version_code,version_name):').replace('value != 84','value != 88').replace("attr + 16, 85)","attr + 16, version_code)").replace("('1.84', '1.85')","('1.88', version_name)").replace("'1.85'.encode(codec)","version_name.encode(codec)")
 assert 'version_code)' in patch and 'version_name.encode' in patch
 exec(compile(patch,'manifest-patcher','exec'),globals())
 build=json.loads((R/'build-local/result.json').read_text(encoding="utf-8"));loader=json.loads((R/'build-loader/result.json').read_text(encoding="utf-8"))
-# Original loader logic with only monotonic APK version fields changed, for 1.92 rollback.
-fallback=OUT/'rollback-loader-src';fallback.mkdir();classes=OUT/'rollback-classes';classes.mkdir();dex=OUT/'rollback-dex';dex.mkdir()
-for file in (W/'wxentry-v226/loader').glob('*.java'):
- text=file.read_text(encoding='utf-8')
- if file.name=='Main.java':text=text.replace('MY_VC = 88','MY_VC = 92').replace('MY_VN = "1.88"','MY_VN = "1.92"').replace('APP_VER = "1.88"','APP_VER = "1.92"')
- (fallback/file.name).write_text(text,encoding='utf-8')
-cp=str(W/'tools/libs/android.jar')+';'+str(W/'tools/libs/xposed-api-82.jar')
-run([JAVA/'javac.exe','-J-Duser.language=en','-encoding','UTF-8','-source','8','-target','8','-nowarn','-cp',cp,'-d',classes,*fallback.glob('*.java')],'rollback-compile')
-jar=OUT/'rollback-loader.jar'
-with zipfile.ZipFile(jar,'w') as z:
- for p in classes.rglob('*.class'):z.write(p,p.relative_to(classes).as_posix())
-run([JAVA/'java.exe','-cp',W/'tools/libs/d8.jar','com.android.tools.r8.D8','--min-api','24','--lib',W/'tools/libs/android.jar','--classpath',W/'tools/libs/xposed-api-82.jar','--output',dex,jar],'rollback-dex')
-old_build=json.loads((W/'wxentry-v226/build-local/result.json').read_text(encoding="utf-8"))
+# Forward-version rollback uses the exact stable loader logic (1.91) with 1.98 version fields.
+rollback_loader=json.loads((W/'rollback-loader198/build-loader/result.json').read_text(encoding="utf-8"))
+old_build=json.loads((W/'wxentry-v232/build-local/result.json').read_text(encoding="utf-8"))
+keypass=OUT/'key-password-private.txt';keypass.write_bytes((signing/'pass.txt').read_bytes())
 try:
  reports={}
- for version,name,ld,kernel in [(91,'1.91',Path(loader['loader_dex']),Path(build['editions']['free']['dex'])),(92,'1.92',dex/'classes.dex',Path(old_build['editions']['free']['dex']))]:
-  raw=OUT/(name+'-raw.apk');aligned=OUT/(name+'-unsigned.apk');signed=OUTPUTS/('wxentry-'+name+('-recovery.apk' if version==91 else '-rollback-v226.apk'))
+ for version,name,ld,kernel in [(97,'1.97',Path(loader['loader_dex']),Path(build['editions']['free']['dex'])),(98,'1.98',Path(rollback_loader['loader_dex']),Path(old_build['editions']['free']['dex']))]:
+  raw=OUT/(name+'-raw.apk');aligned=OUT/(name+'-unsigned.apk');signed=OUTPUTS/('wxentry-'+name+('-tablet-experimental.apk' if version==97 else '-rollback-v232.apk'))
   with zipfile.ZipFile(baseline) as src,zipfile.ZipFile(raw,'w',zipfile.ZIP_DEFLATED) as dst:
    for info in src.infolist():
     if info.filename.startswith('META-INF/') or re.fullmatch(r'classes[0-9]*\.dex',info.filename):continue
@@ -53,7 +43,7 @@ try:
     if info.filename=='AndroidManifest.xml':data=patch_manifest(data,version,name)
     dst.writestr(info,data)
    dst.write(ld,'classes.dex');dst.write(kernel,'classes2.dex')
-   if version==91:
+   if version in [97,98]:
     with zipfile.ZipFile(W/'tools/libs/jadx-all.jar') as deps:dst.writestr('assets/third-party/Apache-2.0.txt',deps.read('META-INF/LICENSE'))
     dst.write(R/'licenses/smali-NOTICE.txt','assets/third-party/smali-NOTICE.txt')
     dst.writestr('assets/third-party/NOTICE.txt','Includes a minimized dexlib2 (Google smali, BSD 3-Clause) and Guava (Google, Apache 2.0) for rewriting runtime DEX indexes.\nSources: https://github.com/google/smali and https://github.com/google/guava\n')

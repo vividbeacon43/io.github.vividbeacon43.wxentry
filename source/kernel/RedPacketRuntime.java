@@ -186,9 +186,11 @@ final class RedPacketRuntime implements RedPacketEngine.Host,RedPacketNative.Lis
     }
     public RedPacketEngine.Attempt legacy(String url,String sendId) { return engine.owned(url,sendId); }
     public void query(final RedPacketEngine.Attempt a,final RedPacketEngine.Query q) {
+        Kernel.T("rp: query result scope="+ReceiptConfig.Scope.of(a.packet.talker)+" error="+(q==null?"missing":q.error)+" hb="+(q==null?-1:q.hbStatus)+" receive="+(q==null?-1:q.receiveStatus)+" timing="+(q!=null&&!RedPacketEngine.empty(q.timing))+" needsAction="+(q!=null&&q.needsAction));
         handler.post(new Runnable() { public void run() { if(modeValid(a))engine.queried(a,q); } });
     }
     public void opened(final RedPacketEngine.Attempt a,final RedPacketEngine.Result r) {
+        Kernel.T("rp: open result scope="+ReceiptConfig.Scope.of(a.packet.talker)+" network="+(r==null?"missing":r.networkType+"/"+r.networkCode)+" detail="+(r!=null&&r.detailPresent)+" receive="+(r==null?-1:r.receiveStatus)+" positiveAmount="+(r!=null&&r.cents>0)+" request="+(r!=null&&r.requestVerified)+" responseId="+(r==null?"missing":r.responseIdState)+" requestFallback="+(r!=null&&r.idFromRequest)+" verdict="+RedPacketEngine.openFailure(a.packet,r));
         handler.post(new Runnable() { public void run() { if(modeValid(a))engine.opened(a,r); } });
     }
     public void replied(final RedPacketEngine.Attempt a,final boolean success) {
@@ -203,7 +205,7 @@ final class RedPacketRuntime implements RedPacketEngine.Host,RedPacketNative.Lis
             if(success!=null && !flag(Kernel.RP_TOAST_OFF_PATH))Kernel.toastMain("抢到红包！");
             return;
         }
-        if(success==null) { record(a.packet.account,status);return; }
+        if(success==null) { Kernel.T("rp: finished scope="+ReceiptConfig.Scope.of(a.packet.talker)+" status="+status);record(a.packet.account,status+"（"+(a.packet.talker.endsWith("@chatroom")?"群聊":"单聊")+"）");return; }
         String name=success.sender;
         if(RedPacketEngine.empty(name) && !RedPacketEngine.empty(success.senderId))name=Kernel.displayNameOf(success.senderId);
         if(RedPacketEngine.empty(name))name="红包发送者";

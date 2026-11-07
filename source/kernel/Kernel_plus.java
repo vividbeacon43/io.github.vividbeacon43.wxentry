@@ -27,9 +27,10 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "230";
+    static final String BUILD = "238";
     public static final String EDITION = "plus";
     static final boolean RP_PREMIUM_EDITION = true;
+    static final boolean TABLET_PREMIUM_EDITION = true;
     static volatile long LAST_PLUS_MS = 0;
     static volatile java.lang.ref.WeakReference<android.view.View> LAST_PLUS_VIEW = null;   // 内核内部版本号，写进 kernel.ver
     static volatile ClassLoader APP_CL = null;
@@ -6026,10 +6027,10 @@ static boolean wxVersionOk(Object actObj) {
     enum MenuAction {
         MARK_READ, CLEAR_CHATS, UNFOLLOW_BIZ, RP_GROUPS, RP_TOGGLE, RP_RECEIVE_MODE, RP_SETTINGS, RP_TEMPLATES, RP_HISTORY, RP_DELAY, TRANSFER_TOGGLE, TRANSFER_LISTS, TRANSFER_DELAY, ANTI_TOGGLE,
         REALNAME_TOGGLE, ORIGINAL_TOGGLE, NEWROOM_TOGGLE, CHECK_UPDATE, WISH,
-        SNS_TOGGLE, RESTART, DIAGNOSTICS, APK_UPDATE, ACTIVATION, DONATE
+        SNS_TOGGLE, RESTART, DIAGNOSTICS, APK_UPDATE, ACTIVATION, DONATE, TABLET_MODE, TABLET_QR
     }
     enum MenuCategory {
-        CHAT("聊天"), RED_PACKET("红包"), ANTI_RECALL("防撤回"), SUPPORT("设置与支持");
+        CHAT("聊天"), RED_PACKET("红包"), ANTI_RECALL("防撤回"), SUPPORT("设置与支持"), EXPERIMENTAL("实验功能");
         final String label;
         MenuCategory(String value) { label = value; }
     }
@@ -6054,8 +6055,10 @@ static boolean wxVersionOk(Object actObj) {
     static java.util.ArrayList<MenuEntry> menuPageEntries(MenuCategory category) {
         java.util.ArrayList<MenuEntry> rows = new java.util.ArrayList<MenuEntry>();
         if (category == null) {
-            for (MenuCategory page : MenuCategory.values())
+            for (MenuCategory page : MenuCategory.values()) {
+                if(page==MenuCategory.EXPERIMENTAL&&!tabletFeatureAvailable())continue;
                 rows.add(new MenuEntry(null, page, menuCategoryTitle(page) + "  ›"));
+            }
             addMenuAction(rows, MenuAction.DONATE, "打赏");
             return rows;
         }
@@ -6085,6 +6088,11 @@ static boolean wxVersionOk(Object actObj) {
             case ANTI_RECALL:
                 addMenuAction(rows, MenuAction.ANTI_TOGGLE, "");
                 addMenuAction(rows, MenuAction.SNS_TOGGLE, "");
+                break;
+            case EXPERIMENTAL:
+                if(!tabletFeatureAvailable())break;
+                addMenuAction(rows,MenuAction.TABLET_MODE,"平板模式");
+                addMenuAction(rows,MenuAction.TABLET_QR,"平板扫码登录");
                 break;
             case SUPPORT:
                 addMenuAction(rows, MenuAction.ACTIVATION, "升级/更换激活码");
@@ -6158,6 +6166,8 @@ static boolean wxVersionOk(Object actObj) {
                 refreshVerLine(act, tVer);
                 break;
             case DONATE: openDonation(act); break;
+            case TABLET_MODE: break;
+            case TABLET_QR: callTabletUi(act,"openTabletQr");break;
             case WISH: showWishDialog(act); break;
             case DIAGNOSTICS: rnSelfCheck(act); break;
             case RESTART: restartWeChat(act); break;
@@ -6172,6 +6182,12 @@ static boolean wxVersionOk(Object actObj) {
         refreshMenuLabel(item);
     }
 
+    static boolean tabletFeatureAvailable() {return TABLET_PREMIUM_EDITION&&"1".equals(callMainStr("tabletFeatureEnabled"));}
+    static void callTabletUi(Activity act,String method) {
+        if(!tabletFeatureAvailable()){toast(act,"平板模式仅限高级版和 VIP 版，请升级内核并安装模块 APK 1.97");return;}
+        try {Class.forName("com.zafiro.wxentry.Main",true,Kernel.class.getClassLoader()).getMethod(method,android.app.Activity.class).invoke(null,act);}
+        catch(Throwable missing){toast(act,"请先更新模块 APK 至 1.97，再使用平板扫码登录");}
+    }
     static void refreshMenuLabelSafe(MenuEntry row) { if(row.action!=null)refreshMenuLabel(row); }
     static Boolean menuToggleValue(MenuEntry row) {
         if(row.action==null)return null;
@@ -6185,10 +6201,18 @@ static boolean wxVersionOk(Object actObj) {
             case ORIGINAL_TOGGLE:return !f(ORIG_OFF_PATH);
             case NEWROOM_TOGGLE:return f(NEWROOM_ON_PATH);
             case SNS_TOGGLE:return f(WXDIR+"sns.keep.del.on");
+            case TABLET_MODE:return "1".equals(callMainStr("tabletModeConfigured"));
             default:return null;
         }
     }
     static boolean setMenuToggle(Activity act,MenuEntry row,boolean on,android.widget.TextView version,Runnable refresh) {
+        if(row.action==MenuAction.TABLET_MODE) {
+            if(!tabletFeatureAvailable()){toast(act,"平板模式仅限高级版和 VIP 版，请升级内核并安装模块 APK 1.97");return false;}
+            try {
+                Class<?> main=Class.forName("com.zafiro.wxentry.Main",true,Kernel.class.getClassLoader());
+                return Boolean.TRUE.equals(main.getMethod("setTabletMode",android.app.Activity.class,boolean.class).invoke(null,act,on));
+            }catch(Throwable missing){toast(act,"请先更新模块 APK 至 1.97，再使用平板模式");return false;}
+        }
         if(row.action==MenuAction.RP_DELAY)return ReceiptSettings.setDelayEnabled(act,ReceiptConfig.Feature.RED_PACKET,on,null);
         if(row.action==MenuAction.TRANSFER_DELAY)return ReceiptSettings.setDelayEnabled(act,ReceiptConfig.Feature.TRANSFER,on,null);
         if(menuToggleValue(row)!=null && menuToggleValue(row).booleanValue()!=on)performMenuAction(act,row,version,null);
@@ -6255,7 +6279,7 @@ static boolean wxVersionOk(Object actObj) {
                             final MenuEntry entry=getItem(position);refreshMenuLabelSafe(entry);
                             Boolean checked=menuToggleValue(entry);
                             if(checked!=null) {
-                                String detail=entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TRANSFER_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.TRANSFER):"";
+                                String detail=entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TRANSFER_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.TRANSFER):entry.action==MenuAction.TABLET_MODE?"开启或关闭后需重启微信，登录页生效":"";
                                 SettingsUi.ToggleRow row=SettingsUi.toggle(act,entry.label,detail,checked.booleanValue(),new SettingsUi.Change() {
                                     public boolean set(boolean on) { boolean saved=setMenuToggle(act,entry,on,tVer,renderMenu[0]);notifyDataSetChanged();return saved; }
                                 });

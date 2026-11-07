@@ -69,8 +69,8 @@ public class Main implements IXposedHookLoadPackage {
     static final String URL_MANIFEST = BASE + "kernel/manifest";
     static final String URL_KERNEL   = BASE + "kernel/download";
     // === 1.43：模块 APK 自身更新 + 内核自动更新/回滚 ===
-    static final int MY_VC = 91;                       // 由 release.py 打包时改写
-    static final String MY_VN = "1.91";
+    static final int MY_VC = 97;                       // 由 release.py 打包时改写
+    static final String MY_VN = "1.97";
     static final String URL_APK_MANIFEST = BASE + "apk.json";
     static final String URL_APK = BASE + "wxentry.apk";
     static final String APK_PENDING = DIR + "apk.pending";
@@ -118,7 +118,7 @@ public class Main implements IXposedHookLoadPackage {
         return EditionPolicy.includesImages(runningEdition) && EditionPolicy.rank(authorized) >= EditionPolicy.rank(runningEdition) ? "1" : "0";
     }
     public static void changeActivation(Activity act) { showActivate(act, readWxid(act)); }
-    static KernelDelivery.Result refreshKernel() throws Exception { return DELIVERY.refresh(licField("token")); }
+    static KernelDelivery.Result refreshKernel() throws Exception { try{return DELIVERY.refresh(licField("token"));}finally{TabletModeHooks.refreshAuthorization();} }
     static void refreshEditionLater() {
         new Thread(new Runnable() { public void run() {
             try { refreshKernel(); } catch (Throwable t) { log("edition refresh " + t.getClass().getSimpleName()); }
@@ -168,6 +168,16 @@ public class Main implements IXposedHookLoadPackage {
     static volatile java.lang.ref.WeakReference<Activity> RECOVERY_ACTIVITY;
     static int RECOVERY_GENERATION;
 
+    static boolean tabletFeatureAllowed() {
+        String token=licField("token"),wxid=licField("wxid");
+        boolean valid=token!=null&&wxid!=null&&verifyToken(token,wxid);
+        return TabletEntitlement.allowed(DELIVERY,token,valid);
+    }
+    public static String tabletFeatureEnabled() {return tabletFeatureAllowed()?"1":"0";}
+    public static String tabletModeConfigured() {return TabletModeHooks.configured()?"1":"0";}
+    public static String tabletModeActive() {return TabletModeHooks.active?"1":"0";}
+    public static boolean setTabletMode(Activity act,boolean enabled) {return TabletLoginEntry.set(act,enabled);}
+    public static void openTabletQr(Activity act) {TabletLoginEntry.openQr(act);}
     static String xposedBridgeName() { return XposedBridge.class.getName(); }
     static byte[] runtimeDex(byte[] verified) {
         if (verified == null) return null;
@@ -218,6 +228,7 @@ public class Main implements IXposedHookLoadPackage {
             XposedBridge.hookAllMethods(Activity.class, "onResume", new XC_MethodHook() {
                 protected void afterHookedMethod(MethodHookParam p) {
                     Activity act = (Activity)p.thisObject;
+                    TabletLoginEntry.resumed(act);
                     if (act.getClass().getName().endsWith(".LauncherUI")) onWeChatReady(act);
                 }
             });
@@ -248,6 +259,7 @@ public class Main implements IXposedHookLoadPackage {
         PROC = "";
         try { PROC = String.valueOf(XposedHelpers.getObjectField(lp, "processName")); } catch (Throwable t) {}
         if (PROC.length() > 0 && !"com.tencent.mm".equals(PROC)) return;
+        try {TabletModeHooks.start(WX_CL,new java.io.File(DIR));}catch(Throwable failure){log("tablet startup unavailable "+failure.getClass().getSimpleName());}
         installRecoveryLifecycle();
         log("handleLoadPackage pkg=" + lp.packageName + " proc=" + PROC);
         try { cleanApkPending(); } catch (Throwable t) {}
@@ -355,7 +367,11 @@ public class Main implements IXposedHookLoadPackage {
                 }
                 final String wxid = w;
                 WX_ID_LAST = wxid;
-                if (wxid == null) log("wxid still null, will retry on plus click");
+                if (wxid == null) {
+                    synchronized (Main.class) { READY_STARTED = false; }
+                    log("wxid unavailable; activation will retry after login");
+                    return;
+                }
                 act.runOnUiThread(new Runnable() {
                     public void run() {
                         boolean lic = false;
@@ -1038,7 +1054,7 @@ public class Main implements IXposedHookLoadPackage {
 
     /** 取内核明文：优先本地缓存（解密+校验），否则联网拉取 */
     // ---------------- 自检 / 诊断 ----------------
-    static final String APP_VER = "1.91";
+    static final String APP_VER = "1.97";
     static volatile boolean READY_STARTED = false;   // onWeChatReady 只跑一次
     static final File BOOTLOG = new File(DIR + "boot.log");
     static final File BOOTPREV = new File(DIR + "boot.prev");
@@ -1569,6 +1585,7 @@ public class Main implements IXposedHookLoadPackage {
     public static String serverVersion() {
         try { return DELIVERY.probe(licField("token")).version; }
         catch (Throwable t) { return null; }
+        finally {TabletModeHooks.refreshAuthorization();}
     }
 
     /** 当前本地内核版本 */

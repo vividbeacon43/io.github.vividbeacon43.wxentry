@@ -35,7 +35,7 @@ public class NativeRedPacketContractCheck {
     }
     public static void main(String[] args) throws Exception {
         String model="com.tencent.mm.plugin.luckymoney.model.";
-        Set<String> names=new HashSet<>(Arrays.asList(model+"n6",model+"h6",model+"e1",model+"q5",model+"i5",model+"o5","q61.s0","w41.z1","zp0.j1","zp0.y","com.tencent.mm.modelbase.s1"));
+        Set<String> names=new HashSet<>(Arrays.asList(model+"n6",model+"h6",model+"e1",model+"q5",model+"i5",model+"o5","q61.s0","w41.z1","zp0.j1","zp0.y","com.tencent.mm.modelbase.s1","com.tencent.mm.plugin.luckymoney.ui.LuckyMoneyNotHookReceiveUI"));
         try(ZipFile zip=new ZipFile(args[0])) {
             Enumeration<? extends ZipEntry> entries=zip.entries();
             while(entries.hasMoreElements()) {
@@ -56,7 +56,7 @@ public class NativeRedPacketContractCheck {
         method(model+"q5","isJumpRemind","Z");
         for(String f:new String[]{"s","t"})field(model+"n6",f,i);
         for(String f:new String[]{"P","o","z","C"})field(model+"n6",f,s);
-        field(model+"h6","h",type(model+"e1"));field(model+"e1","A",i);field(model+"e1","q","J");
+        field(model+"h6","h",type(model+"e1"));field(model+"h6","i",s);field(model+"h6","m",s);field(model+"e1","A",i);field(model+"e1","q","J");
         for(String f:new String[]{"n","i","Q"})field(model+"e1",f,s);
         Method query=method(model+"n6","onGYNetEnd",v,i,s,"Lorg/json/JSONObject;");
         mapping(query,"hbStatus",model+"n6","s");mapping(query,"receiveStatus",model+"n6","t");
@@ -66,6 +66,8 @@ public class NativeRedPacketContractCheck {
         mapping(parse,"amount",model+"e1","q");mapping(parse,"receiveStatus",model+"e1","A");
         mapping(parse,"sendId",model+"e1","n");mapping(parse,"sendNick",model+"e1","i");mapping(parse,"sendUserName",model+"e1","Q");
         method(model+"h6","onGYNetEnd",v,i,s,"Lorg/json/JSONObject;");
+        Method opened=method("com.tencent.mm.plugin.luckymoney.ui.LuckyMoneyNotHookReceiveUI","I7",v,type(model+"h6"));
+        mapping(opened,"key_sendid",model+"h6","i");mapping(opened,"key_native_url",model+"h6","m");
         System.out.println("PASS "+checks+" native red packet request/result/text contracts");
     }
 }

@@ -37,7 +37,9 @@ final class RedPacketEngine {
         boolean needsAction;
     }
     static final class Result {
-        int error, receiveStatus=-1;
+        int error, receiveStatus=-1, networkType, networkCode;
+        boolean requestVerified, idFromRequest, detailPresent;
+        String responseIdState="missing";
         long cents;
         String sendId="", sender="", senderId="";
     }
@@ -92,12 +94,28 @@ final class RedPacketEngine {
     }
     synchronized void opened(Attempt a, Result r) {
         if (!live(a) || a.stage!=Stage.OPEN) return;
-        if (r==null || r.error!=0 || r.receiveStatus!=2 || r.cents<=0 || !a.packet.sendId.equals(r.sendId)) {
-            finish(a,"未确认领取成功，未自动回复",null); return;
-        }
+        String failure=openFailure(a.packet,r);
+        if(failure!=null){finish(a,openFailureText(failure,r),null);return;}
         if (empty(r.sender)) r.sender=a.sender;
         if (empty(r.senderId)) r.senderId=a.senderId;
         finish(a,"领取成功",r);
+    }
+    static String openFailure(Packet packet,Result r) {
+        if(r==null)return "missing-result";
+        if(r.error!=0)return "network-error";
+        if(!r.requestVerified)return "request-mismatch";
+        if(r.receiveStatus!=2)return "receive-status";
+        if(r.cents<=0)return "missing-amount";
+        if(!packet.sendId.equals(r.sendId))return "response-id-mismatch";
+        return null;
+    }
+    static String openFailureText(String reason,Result r) {
+        if("network-error".equals(reason))return "微信拆包返回错误（"+r.networkType+"/"+r.networkCode+"），未自动回复";
+        if("request-mismatch".equals(reason))return "领取请求与本红包不一致，未自动回复";
+        if("receive-status".equals(reason))return "微信未确认已领取（状态 "+r.receiveStatus+"），未自动回复";
+        if("missing-amount".equals(reason))return "未返回有效领取金额，未自动回复";
+        if("response-id-mismatch".equals(reason))return "领取结果与本红包不一致，未自动回复";
+        return "微信未返回领取结果，未自动回复";
     }
     synchronized Attempt owned(String url, String sendId) {
         for (Attempt a : new ArrayList<Attempt>(pending.values()))

@@ -49,7 +49,7 @@ final class RedPacketNative {
         submit=queue.getDeclaredMethod("g",base);
         // Fail before installing any hooks if a required field has moved.
         for(String f:new String[]{"s","t","P","o","z","C"})query.getDeclaredField(f);
-        open.getDeclaredField("h");
+        open.getDeclaredField("h");open.getDeclaredField("i");open.getDeclaredField("m");
         for(String f:new String[]{"A","q","n","i","Q"})result.getDeclaredField(f);
         Class.forName("q61.s0",false,cl).getDeclaredField("f");
         Class.forName("com.tencent.mm.plugin.luckymoney.model.q5",false,cl).getDeclaredMethod("isJumpRemind");
@@ -129,11 +129,18 @@ final class RedPacketNative {
             }
             listener.query(own.attempt,q);
         } else {
-            RedPacketEngine.Result r=new RedPacketEngine.Result();r.error=error;
-            Object data=error==0?field(scene,"h"):null;
+            RedPacketEngine.Result r=new RedPacketEngine.Result();r.error=error;r.networkType=errorType;r.networkCode=errorCode;
+            r.requestVerified=own.attempt.packet.sendId.equals(string(field(scene,"i")))&&own.attempt.packet.url.equals(string(field(scene,"m")));
+            Object data=error==0?field(scene,"h"):null;r.detailPresent=data!=null;
             if(data!=null) {
                 r.receiveStatus=((Number)field(data,"A")).intValue();r.cents=((Number)field(data,"q")).longValue();
                 r.sendId=string(field(data,"n"));r.sender=string(field(data,"i"));r.senderId=string(field(data,"Q"));
+                r.responseIdState=RedPacketEngine.empty(r.sendId)?"missing":own.attempt.packet.sendId.equals(r.sendId)?"match":"mismatch";
+                // Native open UI uses the request's h6.i / h6.m, not e1.n, for identity.
+                // Only a tracked personal request with matching immutable input values may fill an omitted echo.
+                if(!own.attempt.packet.talker.endsWith("@chatroom")&&RedPacketEngine.empty(r.sendId)&&r.requestVerified) {
+                    r.sendId=own.attempt.packet.sendId;r.idFromRequest=true;
+                }
             }
             listener.opened(own.attempt,r);
         }

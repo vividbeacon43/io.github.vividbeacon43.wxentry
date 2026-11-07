@@ -32,7 +32,7 @@ public final class RedPacketEngineTest {
         RedPacketEngine.Query q=new RedPacketEngine.Query();q.hbStatus=2;q.receiveStatus=0;q.timing="token";q.sender="朋友";q.senderId="peer";return q;
     }
     static RedPacketEngine.Result goodResult() {
-        RedPacketEngine.Result r=new RedPacketEngine.Result();r.receiveStatus=2;r.cents=123;r.sendId="id";return r;
+        RedPacketEngine.Result r=new RedPacketEngine.Result();r.requestVerified=true;r.receiveStatus=2;r.cents=123;r.sendId="id";return r;
     }
     public static void main(String[] args) {
         String red="<msg><appmsg><nativeurl><![CDATA["+packet("personal").url+"]]></nativeurl></appmsg></msg>";
@@ -84,6 +84,18 @@ public final class RedPacketEngineTest {
             h=new Fake();e=new RedPacketEngine(h);a=e.accept(p,true);if(stage>0)h.next();if(stage>1)e.queried(a,goodQuery());h.on=false;
             if(stage==0)h.next();else if(stage==1)e.queried(a,goodQuery());else e.opened(a,goodResult());
             check(h.success==0 && e.pending.isEmpty(),"disable during stage "+stage);
+        }
+        for(int kind=0;kind<6;kind++) {
+            h=new Fake();e=new RedPacketEngine(h);a=e.accept(p,true);h.next();e.queried(a,goodQuery());r=goodResult();
+            String reason;
+            if(kind==0){r=null;reason="missing-result";}
+            else if(kind==1){r.error=1;r.networkType=4;r.networkCode=-2000;reason="network-error";}
+            else if(kind==2){r.requestVerified=false;reason="request-mismatch";}
+            else if(kind==3){r.receiveStatus=1;reason="receive-status";}
+            else if(kind==4){r.cents=0;reason="missing-amount";}
+            else {r.sendId="other";reason="response-id-mismatch";}
+            check(reason.equals(RedPacketEngine.openFailure(p,r)),"failure reason distinguishes native rejection "+kind);
+            e.opened(a,r);check(h.success==0&&h.finished==1&&h.lastStatus.equals(RedPacketEngine.openFailureText(reason,r)),"precise failure recorded without reply or retry "+kind);
         }
         h=new Fake();e=new RedPacketEngine(h);a=e.accept(p,true);h.next();h.account="other";e.queried(a,goodQuery());
         check(h.opens==0 && h.success==0,"account switch blocks open");

@@ -1,0 +1,1 @@
+package com.tencent.mm.plugin.login_exdevice.ui;public class LoginAsExDeviceUI {public String r;public byte[] s;public void initView(){}protected void onCreate(android.os.Bundle state){}public void onSceneEnd(int type,int code,String message,com.tencent.mm.modelbase.n1 scene){}}

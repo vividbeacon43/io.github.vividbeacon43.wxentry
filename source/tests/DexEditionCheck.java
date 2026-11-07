@@ -41,7 +41,7 @@ public final class DexEditionCheck {
         Map<String,String> values=new HashMap<>();
         for(Field f:kernel.getStaticFields())if(f.getInitialValue() instanceof StringEncodedValue)
             values.put(f.getName(),((StringEncodedValue)f.getInitialValue()).getValue());
-        if(!args[1].equals(values.get("EDITION"))||!"230".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
+        if(!args[1].equals(values.get("EDITION"))||!"238".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
         for(String name:new String[]{"RedPacketPolicy","RedPacketEngine","RedPacketNative","RedPacketRuntime","RedPacketSettings"})
             if(!red.contains(root+name+";"))throw new AssertionError("Red packet runtime missing: "+name);
         boolean nativeTip=false;
@@ -68,6 +68,9 @@ public final class DexEditionCheck {
             premiumFlag=((BooleanEncodedValue)f.getInitialValue()).getValue();seenFlag=true;
         }
         if(!seenFlag || premiumFlag!=premium)throw new AssertionError("Red packet premium edition boundary changed");
+        Boolean tabletPremium=null;
+        for(Field f:kernel.getStaticFields())if(f.getName().equals("TABLET_PREMIUM_EDITION")&&f.getInitialValue() instanceof BooleanEncodedValue)tabletPremium=((BooleanEncodedValue)f.getInitialValue()).getValue();
+        if(tabletPremium==null||tabletPremium.booleanValue()!=premium)throw new AssertionError("Tablet paid kernel boundary failed");
         if(images!=premium||cache!=premium)throw new AssertionError("Image boundary changed");
         boolean voiceStart=false,forwardStart=false,imageStart=false,recallMarkStart=false;
         Set<String> methods=new HashSet<>();
@@ -119,6 +122,6 @@ public final class DexEditionCheck {
                 }
             }
         if(!singleChoice || multiChoice || !frontLabel || !silentLabel)throw new AssertionError("Receive mode is not an explicit mutually exclusive picker");
-        System.out.println("PASS edition="+args[1]+" BUILD=230 voice=true forward=true receipt=true redpacket_premium="+premium+" receive_mode="+(args[1].equals("free")?"manual-open-only":"single-choice")+" image="+premium);
+        System.out.println("PASS edition="+args[1]+" BUILD=238 voice=true forward=true receipt=true redpacket_premium="+premium+" receive_mode="+(args[1].equals("free")?"manual-open-only":"single-choice")+" image="+premium+" tablet_premium="+premium);
     }
 }
