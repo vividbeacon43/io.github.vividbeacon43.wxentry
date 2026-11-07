@@ -1,0 +1,1 @@
+package android.os;public class Handler {public static final java.util.ArrayDeque<Runnable> queue=new java.util.ArrayDeque<>();public Handler(Looper l){}public boolean post(Runnable r){queue.add(r);return true;}public static void drain(){while(!queue.isEmpty())queue.remove().run();}}

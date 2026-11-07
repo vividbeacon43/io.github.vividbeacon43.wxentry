@@ -1,0 +1,98 @@
+{
+  "version": "230",
+  "apk_target_version": "1.91",
+  "checks": {
+    "voice_callback_behavior": "PASS 29 voice callback behavior checks",
+    "voice_forward_behavior": "PASS 45 voice forwarding behavior checks",
+    "modern_voice_sender_behavior": "PASS 37 modern voice file/submission checks",
+    "voice_marker_layout": "PASS 16 voice marker layout/recycling checks",
+    "batch_queue_behavior": "PASS 74 batch timing/progress/cancellation checks",
+    "chat_list_filters": "PASS 19 conversation eligibility/filter checks",
+    "settings_switch_binding_and_layout": "PASS 23 right-side switch/binding/theme checks",
+    "recall_following_message_regression": "PASS 42 inline recall metadata/following-message regression checks",
+    "recall_inline_display_recycling": "PASS 56 inline recall binding/recycling/persistence display checks",
+    "plus_panel_live_presence_and_recovery": "PASS 20 plus popup presence, reuse, and transactional recovery checks",
+    "v212_voice_image_sources_and_delivery_policy_preserved": true,
+    "redpacket_premium_policy": "PASS 89 premium entitlement and exclusive mode checks",
+    "redpacket_state_behavior": "PASS 96 red packet state/ownership/template checks",
+    "redpacket_native_adapter": "PASS 35 native red packet callback/submission checks",
+    "redpacket_settings_reply_flow": "PASS 78 red packet settings/persistence/reply-flow checks",
+    "receipt_lists_seconds_and_migration": "PASS 37 receipt list/seconds/migration checks",
+    "transfer_native_receive_flow": "PASS 42 transfer parser/native/receipt-flow checks",
+    "native_voice_contracts": "PASS 41 native voice menu/file/task/result contracts",
+    "native_redpacket_contracts": "PASS 39 native red packet request/result/text contracts",
+    "native_transfer_contracts": "PASS 44 native transfer and manual red packet UI contracts",
+    "native_recall_message_allocator": "PASS 50 native recall allocator and inline row/text/identity contracts"
+  },
+  "editions": {
+    "free": {
+      "sha256": "f6a0e72775f8ebb29819b74dcd7885c0fcf4e79bf25185943aa609b49f74bab2",
+      "bytes": 391796,
+      "check": "PASS edition=free BUILD=230 voice=true forward=true receipt=true redpacket_premium=false receive_mode=manual-open-only image=false",
+      "signature_verified": true
+    },
+    "plus": {
+      "sha256": "508a79481d2d21162862c6003ffd964fc01b1dfc700558e66ad92a6e8031d72b",
+      "bytes": 421020,
+      "check": "PASS edition=plus BUILD=230 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true",
+      "signature_verified": true
+    },
+    "vip": {
+      "sha256": "9dc0eec6015cd84eed5ead8154ae7239f12a010dbcc553c8a1bfd1fc5e456d9a",
+      "bytes": 421016,
+      "check": "PASS edition=vip BUILD=230 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true",
+      "signature_verified": true
+    }
+  },
+  "phone_tested": false,
+  "production_deployed": true,
+  "signed": true,
+  "native_apk_sha256": "9d9b6c516e8e07e437c81485fde21fe13ce4f61b37d19e793fff40c71be39c0e",
+  "behavior_and_contract_checks": 912,
+  "framework_dex_checks": 168,
+  "final_dex_enum_contracts": 81,
+  "signed_loader_rollback_checks": 6,
+  "apk_version": "1.91",
+  "apk_certificate_preserved": true,
+  "backend_unchanged": true,
+  "source_baseline": "228",
+  "signed_cache_preserved": true,
+  "real_user_incident_fully_verified": false,
+  "loader": {
+    "versionCode": 91,
+    "versionName": "1.91",
+    "sha256": "66181976d3190e3a5cceecb302f1f3205cdcb9928435a5713694356752919662",
+    "bytes": 465308,
+    "checks": "PASS 168 framework DEX ordering/search/body/immutability checks",
+    "enum_contracts": "PASS 81 final DEX enum reflection contracts",
+    "optimized_runtime_tested": true,
+    "signed_cache_input_immutable": true,
+    "runtime_dependency_source_sha256": "fe3e12c45acf75f92369685fd02d1d7a7323385dc725680a9b98a0dac0ea554b",
+    "single_dex": true,
+    "phone_tested": false
+  },
+  "apks": {
+    "1.91": {
+      "versionCode": 91,
+      "versionName": "1.91",
+      "sha256": "2438116650f40b4ccaf2571f92c2111cda0bec1fee2f529ad62e2d0bee225060",
+      "bytes": 423042,
+      "same_signer": true,
+      "v1_v2_v3_verified": true,
+      "loader_sha256": "66181976d3190e3a5cceecb302f1f3205cdcb9928435a5713694356752919662",
+      "embedded_free_sha256": "f6a0e72775f8ebb29819b74dcd7885c0fcf4e79bf25185943aa609b49f74bab2",
+      "phone_tested": false
+    },
+    "1.92": {
+      "versionCode": 92,
+      "versionName": "1.92",
+      "sha256": "d13e8080555095f81b74140b706d25ba9d129fea49bf60fe9aad18e4900dd2dc",
+      "bytes": 263063,
+      "same_signer": true,
+      "v1_v2_v3_verified": true,
+      "loader_sha256": "75ddf7333d54b3424b76f48450f4f24a9c0282a187602fc0bd6e489126926bb6",
+      "embedded_free_sha256": "0e14272e73f7d6fbd24eed794ccd6349bc3fc622399a4d2beeca444f7eacc234",
+      "phone_tested": false
+    }
+  }
+}

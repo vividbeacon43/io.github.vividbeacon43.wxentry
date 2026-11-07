@@ -1,0 +1,1 @@
+package com.tencent.mm.ui.widget;public class MMNeat7extView extends android.view.View {public CharSequence text="";public boolean dropSpans;public CharSequence a(){return text;}public void c(CharSequence v,android.widget.TextView.BufferType b,Boolean extra){text=dropSpans?v.toString():v;}}

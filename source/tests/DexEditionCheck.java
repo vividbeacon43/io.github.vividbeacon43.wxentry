@@ -1,0 +1,124 @@
+import java.io.File;
+import java.util.*;
+import com.android.tools.smali.dexlib2.*;
+import com.android.tools.smali.dexlib2.iface.*;
+import com.android.tools.smali.dexlib2.iface.value.*;
+import com.android.tools.smali.dexlib2.iface.instruction.*;
+import com.android.tools.smali.dexlib2.iface.reference.*;
+public final class DexEditionCheck {
+    public static void main(String[] args) throws Exception {
+        DexFile dex=DexFileFactory.loadDexFile(new File(args[0]),Opcodes.getDefault());
+        ClassDef kernel=null;boolean images=false,cache=false,voice=false,forward=false,sender=false,picker=false,queue=false,icon=false,layout=false;
+        Set<String> red=new HashSet<>();ClassDef settings=null;
+        String root="Lcom/zafiro/wxentry/kernel/";
+        Set<String> receiptClasses=new HashSet<>();
+        for(ClassDef c:dex.getClasses()) {
+            receiptClasses.add(c.getType());
+            if(c.getType().startsWith(root+"RedPacket"))red.add(c.getType());
+            if(c.getType().equals(root+"RedPacketSettings;"))settings=c;
+            if(c.getType().equals(root+"Kernel;"))kernel=c;
+            if(c.getType().equals(root+"ImageRecallRuntime;"))images=true;
+            if(c.getType().equals(root+"RecallImageCache;"))cache=true;
+            if(c.getType().equals(root+"VoiceRecallRuntime;"))voice=true;
+            if(c.getType().equals(root+"VoiceForwardRuntime;"))forward=true;
+            if(c.getType().equals(root+"VoiceForwardSender;"))sender=true;
+            if(c.getType().equals(root+"VoiceForwardPicker;"))picker=true;
+            if(c.getType().equals(root+"VoiceForwardQueue;"))queue=true;
+            if(c.getType().equals(root+"VoiceForwardIcon;"))icon=true;
+            if(c.getType().equals(root+"VoiceForwardLayout;"))layout=true;
+            if(c.getType().startsWith(root+"VoiceForward"))for(Method m:c.getMethods()) {
+                if(m.getImplementation()==null)continue;
+                for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction) {
+                    Reference r=((ReferenceInstruction)ins).getReference();
+                    if(r instanceof MethodReference && ((MethodReference)r).getDefiningClass().equals("Lq71/o;"))
+                        throw new AssertionError("Obsolete crashing voice uploader referenced");
+                    if(r instanceof StringReference && ((StringReference)r).getString().equals("q71.o"))
+                        throw new AssertionError("Obsolete uploader reflection referenced");
+                }
+            }
+        }
+        if(kernel==null||!voice||!forward||!sender||!picker||!queue||!icon||!layout)throw new AssertionError("Base voice runtime missing");
+        Map<String,String> values=new HashMap<>();
+        for(Field f:kernel.getStaticFields())if(f.getInitialValue() instanceof StringEncodedValue)
+            values.put(f.getName(),((StringEncodedValue)f.getInitialValue()).getValue());
+        if(!args[1].equals(values.get("EDITION"))||!"230".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
+        for(String name:new String[]{"RedPacketPolicy","RedPacketEngine","RedPacketNative","RedPacketRuntime","RedPacketSettings"})
+            if(!red.contains(root+name+";"))throw new AssertionError("Red packet runtime missing: "+name);
+        boolean nativeTip=false;
+        for(Method m:kernel.getMethods()) {
+            if(m.getName().equals("insertKeptCopy")||m.getName().equals("cloneRecently")||m.getName().equals("notifyInsert"))throw new AssertionError("Unsafe raw message cloning path retained");
+            if(m.getName().equals("insertTipRow") && m.getImplementation()!=null)for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction) {
+                Reference ref=((ReferenceInstruction)ins).getReference();
+                if(ref instanceof MethodReference && ((MethodReference)ref).getDefiningClass().equals(root+"RecallTipRuntime;") && ((MethodReference)ref).getName().equals("insert"))nativeTip=true;
+            }
+        }
+        if(!nativeTip)throw new AssertionError("Recall annotation does not record the original identity");
+        for(ClassDef c:dex.getClasses())if(c.getType().equals(root+"RecallTipRuntime;")||c.getType().equals(root+"RecallMarkLayout;")||c.getType().equals(root+"RecallMarkStore;"))for(Method m:c.getMethods())if(m.getImplementation()!=null)
+            for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction) {
+                Reference ref=((ReferenceInstruction)ins).getReference();
+                if(ref instanceof MethodReference) {
+                    String name=((MethodReference)ref).getName();
+                    if(Arrays.asList("execSQL","insertWithOnConflict","replace","Zb","setMsgId").contains(name))throw new AssertionError("Annotation writes to native message storage");
+                }
+                if(ref instanceof StringReference && ((StringReference)ref).getString().equals("Zb"))throw new AssertionError("Annotation allocates a new native message");
+            }
+        boolean premium=args[1].equals("plus")||args[1].equals("vip");
+        boolean premiumFlag=false,seenFlag=false;
+        for(Field f:kernel.getStaticFields())if(f.getName().equals("RP_PREMIUM_EDITION") && f.getInitialValue() instanceof BooleanEncodedValue) {
+            premiumFlag=((BooleanEncodedValue)f.getInitialValue()).getValue();seenFlag=true;
+        }
+        if(!seenFlag || premiumFlag!=premium)throw new AssertionError("Red packet premium edition boundary changed");
+        if(images!=premium||cache!=premium)throw new AssertionError("Image boundary changed");
+        boolean voiceStart=false,forwardStart=false,imageStart=false,recallMarkStart=false;
+        Set<String> methods=new HashSet<>();
+        for(Method m:kernel.getMethods()) {
+            methods.add(m.getName());
+            if(!m.getName().equals("boot0")||m.getImplementation()==null)continue;
+            for(Instruction i:m.getImplementation().getInstructions()) {
+                if(!(i instanceof ReferenceInstruction))continue;
+                Reference r=((ReferenceInstruction)i).getReference();
+                if(!(r instanceof MethodReference))continue;
+                MethodReference ref=(MethodReference)r;
+                if(!ref.getName().equals("start"))continue;
+                if(ref.getDefiningClass().equals(root+"VoiceRecallRuntime;"))voiceStart=true;
+                if(ref.getDefiningClass().equals(root+"VoiceForwardRuntime;"))forwardStart=true;
+                if(ref.getDefiningClass().equals(root+"ImageRecallRuntime;"))imageStart=true;
+                if(ref.getDefiningClass().equals(root+"RecallMarkLayout;"))recallMarkStart=true;
+            }
+        }
+        if(!voiceStart||!forwardStart||!recallMarkStart||imageStart!=premium)throw new AssertionError("Runtime start boundary failed");
+        if(!methods.contains("isMenuReady")||!methods.contains("openRecoveredMenu"))throw new AssertionError("Menu API missing");
+        boolean redStart=false;
+        for(Method m:kernel.getMethods())if(m.getName().equals("hookRedPacket") && m.getImplementation()!=null)
+            for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction) {
+                Reference ref=((ReferenceInstruction)ins).getReference();
+                if(ref instanceof MethodReference && ((MethodReference)ref).getDefiningClass().equals(root+"RedPacketRuntime;")
+                        && ((MethodReference)ref).getName().equals("start"))redStart=true;
+            }
+        if(!redStart)throw new AssertionError("Red packet runtime not started");
+        for(String name:new String[]{"ReceiptConfig","ReceiptStore","ReceiptTargets","ReceiptSettings","SettingsUi","RecallTipRuntime","RecallMarkStore","RecallMarkLayout","TransferEngine","TransferNative","TransferRuntime","NativeSceneBus"})
+            if(!receiptClasses.contains(root+name+";"))throw new AssertionError("Receipt runtime missing: "+name);
+        boolean transferStart=false;
+        for(Method m:kernel.getMethods())if(m.getName().equals("hookRedPacket") && m.getImplementation()!=null)
+            for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction) {
+                Reference ref=((ReferenceInstruction)ins).getReference();
+                if(ref instanceof MethodReference && ((MethodReference)ref).getDefiningClass().equals(root+"TransferRuntime;") && ((MethodReference)ref).getName().equals("start"))transferStart=true;
+            }
+        if(!transferStart)throw new AssertionError("Transfer runtime not started");
+        if(!methods.contains("receiptAccount") || !methods.contains("freeRedPacketManualOnly"))throw new AssertionError("Receipt account/free gate missing");
+        if(!methods.contains("redPacketPremiumEnabled"))throw new AssertionError("Red packet authorization gate missing");
+        boolean singleChoice=false,multiChoice=false,frontLabel=false,silentLabel=false;
+        for(Method m:settings.getMethods())if(m.getName().equals("mode") && m.getImplementation()!=null)
+            for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction) {
+                Reference ref=((ReferenceInstruction)ins).getReference();
+                if(ref instanceof MethodReference) {
+                    String name=((MethodReference)ref).getName();singleChoice|=name.equals("setSingleChoiceItems");multiChoice|=name.equals("setMultiChoiceItems");
+                }
+                if(ref instanceof StringReference) {
+                    String label=((StringReference)ref).getString();frontLabel|=label.equals("前台自动点领取");silentLabel|=label.equals("后台静默领取（高级版）");
+                }
+            }
+        if(!singleChoice || multiChoice || !frontLabel || !silentLabel)throw new AssertionError("Receive mode is not an explicit mutually exclusive picker");
+        System.out.println("PASS edition="+args[1]+" BUILD=230 voice=true forward=true receipt=true redpacket_premium="+premium+" receive_mode="+(args[1].equals("free")?"manual-open-only":"single-choice")+" image="+premium);
+    }
+}

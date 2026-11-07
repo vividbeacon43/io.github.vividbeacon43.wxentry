@@ -1,0 +1,1 @@
+package zp0;public class j1 {public static boolean unavailable;public static Object v(Class<?> service){if(unavailable)throw new IllegalStateException("service unavailable");return new com.tencent.mm.plugin.messenger.foundation.h2();}}
