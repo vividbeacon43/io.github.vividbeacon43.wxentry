@@ -1,6 +1,6 @@
 {
-  "version": "238",
-  "apk_target_version": "1.97",
+  "version": "240",
+  "apk_target_version": "1.99",
   "checks": {
     "voice_callback_behavior": "PASS 29 voice callback behavior checks",
     "voice_forward_behavior": "PASS 45 voice forwarding behavior checks",
@@ -15,102 +15,107 @@
     "tablet_early_boot_and_disable": "PASS 30 early tablet mode, atomic persistence, isolation and disable checks",
     "tablet_restart_scheduling": "PASS 9 explicit restart scheduling/fallback/termination checks",
     "tablet_signed_paid_entitlement": "PASS 15 signed paid tablet entitlement, downgrade and tampering checks",
+    "media_cache_and_original_policy": "PASS 35 media cache expiry, retention, restore, identity and independent original policy checks",
+    "media_revoke_original_queue_behavior": "PASS 27 native media interception, original mode, queued list/owner and failure behavior checks",
     "v212_voice_image_sources_and_delivery_policy_preserved": true,
     "redpacket_premium_policy": "PASS 89 premium entitlement and exclusive mode checks",
     "redpacket_state_behavior": "PASS 108 red packet state/ownership/template checks",
     "redpacket_native_adapter": "PASS 49 native red packet callback/submission checks",
     "redpacket_settings_reply_flow": "PASS 89 red packet settings/persistence/reply-flow checks",
-    "receipt_lists_seconds_and_migration": "PASS 37 receipt list/seconds/migration checks",
+    "receipt_lists_seconds_and_migration": "PASS 43 receipt list/seconds/migration checks",
     "transfer_native_receive_flow": "PASS 42 transfer parser/native/receipt-flow checks",
     "native_voice_contracts": "PASS 41 native voice menu/file/task/result contracts",
     "native_redpacket_contracts": "PASS 44 native red packet request/result/text contracts",
     "native_transfer_contracts": "PASS 44 native transfer and manual red packet UI contracts",
     "native_recall_message_allocator": "PASS 50 native recall allocator and inline row/text/identity contracts",
-    "native_tablet_login_contracts": "PASS 23 native tablet/login/QR contracts"
+    "native_tablet_login_contracts": "PASS 23 native tablet/login/QR contracts",
+    "native_media_file_original_contracts": "PASS 45 native video/file revoke, download, path and original image contracts"
   },
   "editions": {
     "free": {
-      "sha256": "a717c6acfdce7dda12f304feb3616bda6fe6134281784873b973675dc5a3f14c",
-      "bytes": 395564,
-      "check": "PASS edition=free BUILD=238 voice=true forward=true receipt=true redpacket_premium=false receive_mode=manual-open-only image=false tablet_premium=false",
+      "sha256": "a6e118ed4d13996c8c715bcaf90585c96c9823120537877065863c6546dc844c",
+      "bytes": 426968,
+      "check": "PASS edition=free BUILD=240 voice=true forward=true receipt=true redpacket_premium=false receive_mode=manual-open-only image=false tablet_premium=false media_prefetch=true original_download=true",
       "signature_verified": true
     },
     "plus": {
-      "sha256": "521a4ab59e9be9d6d0bcda36373fd6a0f83a242fb9ad859427f3328f4b37f6ba",
-      "bytes": 424852,
-      "check": "PASS edition=plus BUILD=238 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true tablet_premium=true",
+      "sha256": "125994c9117db8e3ffeee8797a69d098a42586fbcb5ded751ccfa4a4b8215f7b",
+      "bytes": 454084,
+      "check": "PASS edition=plus BUILD=240 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true tablet_premium=true media_prefetch=true original_download=true",
       "signature_verified": true
     },
     "vip": {
-      "sha256": "018b493872246f93c69ea0de5b3cb9282373c99f0eb2e55c7de2dd03185c30f9",
-      "bytes": 424848,
-      "check": "PASS edition=vip BUILD=238 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true tablet_premium=true",
+      "sha256": "b65bcf3830e8e34576fbeb9677338c10556e75370b081b221fbd6acc7cdece77",
+      "bytes": 454080,
+      "check": "PASS edition=vip BUILD=240 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true tablet_premium=true media_prefetch=true original_download=true",
       "signature_verified": true
     }
   },
-  "phone_tested": true,
+  "phone_tested": false,
   "production_deployed": true,
   "signed": true,
   "native_apk_sha256": "9d9b6c516e8e07e437c81485fde21fe13ce4f61b37d19e793fff40c71be39c0e",
   "phone_validation": {
-    "apk_version": "1.97",
-    "apk_sha256": "1808541666e20242ca09f1aa89ab1185cc34707993c2a108589eeee71a3cd552",
-    "profile": "unlogged-in clone without activation",
-    "old_saved_setting_on": true,
-    "paid_phone_tested": false,
-    "qr_visible_verified": false,
-    "login_confirmed": false,
-    "installed": true,
-    "new_process_verified": true,
-    "unlicensed_old_setting_blocked": true,
-    "original_wechat_process_preserved": true
+    "phone_tested": false,
+    "real_media_send_receive_tested": false,
+    "real_original_download_tested": false,
+    "login_confirmed": false
   },
   "qr_visible_verified": false,
   "login_confirmed": false,
   "tablet_default_off": true,
   "tablet_premium_only": true,
-  "behavior_and_contract_checks": 1031,
+  "media_prefetch_all_editions": true,
+  "original_download_all_editions": true,
+  "original_independent_of_anti_recall": true,
+  "original_lists_account_scoped": true,
+  "behavior_and_contract_checks": 1144,
   "framework_dex_checks": 168,
   "final_dex_enum_contracts": 81,
   "signed_loader_rollback_checks": 6,
-  "apk_version": "1.97",
+  "apk_version": "1.99",
   "apk_certificate_preserved": true,
   "backend_unchanged": true,
-  "source_baseline": "236",
+  "source_baseline": "238",
   "signed_cache_preserved": true,
   "loader": {
-    "versionCode": 97,
-    "versionName": "1.97",
-    "sha256": "7916bf3d8a084280ef2f3712721dceb3e68643bd643da1f2de23fe08783fff44",
+    "versionCode": 99,
+    "versionName": "1.99",
+    "sha256": "4fdfb80bc452bc46cac26095fd21d5f4edb748d5c97008fcfbd9558a233e080b",
     "bytes": 484448,
     "checks": "PASS 168 framework DEX ordering/search/body/immutability checks",
     "enum_contracts": "PASS 81 final DEX enum reflection contracts",
     "optimized_runtime_tested": true,
     "signed_cache_input_immutable": true,
     "runtime_dependency_source_sha256": "fe3e12c45acf75f92369685fd02d1d7a7323385dc725680a9b98a0dac0ea554b",
-    "single_dex": true
+    "single_dex": true,
+    "kernel_inputs": {
+      "free": "a6e118ed4d13996c8c715bcaf90585c96c9823120537877065863c6546dc844c",
+      "plus": "125994c9117db8e3ffeee8797a69d098a42586fbcb5ded751ccfa4a4b8215f7b",
+      "vip": "b65bcf3830e8e34576fbeb9677338c10556e75370b081b221fbd6acc7cdece77"
+    }
   },
   "apks": {
-    "1.97": {
-      "versionCode": 97,
-      "versionName": "1.97",
-      "sha256": "1808541666e20242ca09f1aa89ab1185cc34707993c2a108589eeee71a3cd552",
+    "1.99": {
+      "versionCode": 99,
+      "versionName": "1.99",
+      "sha256": "6c9a730162dccf748489bde37e63021d6f3ba941acbb814406137b6cd2d29149",
+      "bytes": 443522,
+      "same_signer": true,
+      "v1_v2_v3_verified": true,
+      "loader_sha256": "4fdfb80bc452bc46cac26095fd21d5f4edb748d5c97008fcfbd9558a233e080b",
+      "embedded_free_sha256": "a6e118ed4d13996c8c715bcaf90585c96c9823120537877065863c6546dc844c",
+      "phone_tested": false
+    },
+    "2.00": {
+      "versionCode": 100,
+      "versionName": "2.00",
+      "sha256": "62563fbafdf975cffd1b3ebcc8b48a51b27d90e2f9bc4d1eb9142e78c64f1558",
       "bytes": 431234,
       "same_signer": true,
       "v1_v2_v3_verified": true,
-      "loader_sha256": "7916bf3d8a084280ef2f3712721dceb3e68643bd643da1f2de23fe08783fff44",
+      "loader_sha256": "f1a338b755fbaa69d90a1ef85181c2409c1f7d77540e7e91291e2291b11f9de0",
       "embedded_free_sha256": "a717c6acfdce7dda12f304feb3616bda6fe6134281784873b973675dc5a3f14c",
-      "phone_tested": true
-    },
-    "1.98": {
-      "versionCode": 98,
-      "versionName": "1.98",
-      "sha256": "d5fbd89288eba294732c074096439f8ee1e8370399bcf952ec672602218a7b52",
-      "bytes": 423042,
-      "same_signer": true,
-      "v1_v2_v3_verified": true,
-      "loader_sha256": "255224b223ef9a26d6a860632d76fb7563a519bf2db3cf2fbf0872a4970b84c9",
-      "embedded_free_sha256": "7a622e47cfdb399957f150e74ec5221f69d412da6fc75754d5b2ebc27555e1f1",
       "phone_tested": false
     }
   }

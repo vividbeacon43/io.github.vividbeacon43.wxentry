@@ -4,10 +4,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
 
-/** Separate, account-owned rules for red packets and incoming transfers. */
+/** Separate, account-owned rules for receipts and automatic original-photo downloads. */
 final class ReceiptConfig {
     enum Feature {
-        RED_PACKET("redpacket","红包"), TRANSFER("transfer","转账");
+        RED_PACKET("redpacket","红包"), TRANSFER("transfer","转账"), ORIGINAL_IMAGE("originalimage","原图下载");
         final String key,label;
         Feature(String k,String l) { key=k;label=l; }
     }

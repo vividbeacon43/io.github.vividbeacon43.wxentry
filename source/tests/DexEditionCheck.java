@@ -41,7 +41,7 @@ public final class DexEditionCheck {
         Map<String,String> values=new HashMap<>();
         for(Field f:kernel.getStaticFields())if(f.getInitialValue() instanceof StringEncodedValue)
             values.put(f.getName(),((StringEncodedValue)f.getInitialValue()).getValue());
-        if(!args[1].equals(values.get("EDITION"))||!"238".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
+        if(!args[1].equals(values.get("EDITION"))||!"240".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
         for(String name:new String[]{"RedPacketPolicy","RedPacketEngine","RedPacketNative","RedPacketRuntime","RedPacketSettings"})
             if(!red.contains(root+name+";"))throw new AssertionError("Red packet runtime missing: "+name);
         boolean nativeTip=false;
@@ -72,7 +72,7 @@ public final class DexEditionCheck {
         for(Field f:kernel.getStaticFields())if(f.getName().equals("TABLET_PREMIUM_EDITION")&&f.getInitialValue() instanceof BooleanEncodedValue)tabletPremium=((BooleanEncodedValue)f.getInitialValue()).getValue();
         if(tabletPremium==null||tabletPremium.booleanValue()!=premium)throw new AssertionError("Tablet paid kernel boundary failed");
         if(images!=premium||cache!=premium)throw new AssertionError("Image boundary changed");
-        boolean voiceStart=false,forwardStart=false,imageStart=false,recallMarkStart=false;
+        boolean voiceStart=false,forwardStart=false,imageStart=false,recallMarkStart=false,mediaStart=false,originalStart=false;
         Set<String> methods=new HashSet<>();
         for(Method m:kernel.getMethods()) {
             methods.add(m.getName());
@@ -87,9 +87,11 @@ public final class DexEditionCheck {
                 if(ref.getDefiningClass().equals(root+"VoiceForwardRuntime;"))forwardStart=true;
                 if(ref.getDefiningClass().equals(root+"ImageRecallRuntime;"))imageStart=true;
                 if(ref.getDefiningClass().equals(root+"RecallMarkLayout;"))recallMarkStart=true;
+                if(ref.getDefiningClass().equals(root+"MediaRecallRuntime;"))mediaStart=true;
+                if(ref.getDefiningClass().equals(root+"OriginalImageRuntime;"))originalStart=true;
             }
         }
-        if(!voiceStart||!forwardStart||!recallMarkStart||imageStart!=premium)throw new AssertionError("Runtime start boundary failed");
+        if(!voiceStart||!forwardStart||!recallMarkStart||!mediaStart||!originalStart||imageStart!=premium)throw new AssertionError("Runtime start boundary failed");
         if(!methods.contains("isMenuReady")||!methods.contains("openRecoveredMenu"))throw new AssertionError("Menu API missing");
         boolean redStart=false;
         for(Method m:kernel.getMethods())if(m.getName().equals("hookRedPacket") && m.getImplementation()!=null)
@@ -99,7 +101,7 @@ public final class DexEditionCheck {
                         && ((MethodReference)ref).getName().equals("start"))redStart=true;
             }
         if(!redStart)throw new AssertionError("Red packet runtime not started");
-        for(String name:new String[]{"ReceiptConfig","ReceiptStore","ReceiptTargets","ReceiptSettings","SettingsUi","RecallTipRuntime","RecallMarkStore","RecallMarkLayout","TransferEngine","TransferNative","TransferRuntime","NativeSceneBus"})
+        for(String name:new String[]{"ReceiptConfig","ReceiptStore","ReceiptTargets","ReceiptSettings","SettingsUi","RecallTipRuntime","RecallMarkStore","RecallMarkLayout","TransferEngine","TransferNative","TransferRuntime","NativeSceneBus","MediaMessagePolicy","RecallMediaCache","MediaNative","MediaRecallRuntime","OriginalImageRuntime"})
             if(!receiptClasses.contains(root+name+";"))throw new AssertionError("Receipt runtime missing: "+name);
         boolean transferStart=false;
         for(Method m:kernel.getMethods())if(m.getName().equals("hookRedPacket") && m.getImplementation()!=null)
@@ -122,6 +124,6 @@ public final class DexEditionCheck {
                 }
             }
         if(!singleChoice || multiChoice || !frontLabel || !silentLabel)throw new AssertionError("Receive mode is not an explicit mutually exclusive picker");
-        System.out.println("PASS edition="+args[1]+" BUILD=238 voice=true forward=true receipt=true redpacket_premium="+premium+" receive_mode="+(args[1].equals("free")?"manual-open-only":"single-choice")+" image="+premium+" tablet_premium="+premium);
+        System.out.println("PASS edition="+args[1]+" BUILD=240 voice=true forward=true receipt=true redpacket_premium="+premium+" receive_mode="+(args[1].equals("free")?"manual-open-only":"single-choice")+" image="+premium+" tablet_premium="+premium+" media_prefetch=true original_download=true");
     }
 }

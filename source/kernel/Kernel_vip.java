@@ -27,7 +27,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "238";
+    static final String BUILD = "240";
     public static final String EDITION = "vip";
     static final boolean RP_PREMIUM_EDITION = true;
     static final boolean TABLET_PREMIUM_EDITION = true;
@@ -476,6 +476,8 @@ static boolean wxVersionOk(Object actObj) {
 
         try { RecallMarkLayout.start(cl); } catch (Throwable t) { T("ARMARK UI unavailable " + t.getClass().getSimpleName()); }
         try { VoiceRecallRuntime.start(cl); } catch (Throwable t) { T("ARVOICE install-error " + t.getClass().getSimpleName()); }
+        try { MediaRecallRuntime.start(cl); } catch (Throwable t) { T("ARMEDIA install-error " + t.getClass().getSimpleName()); }
+        try { OriginalImageRuntime.start(cl); } catch (Throwable t) { T("ARORIGINAL install-error " + t.getClass().getSimpleName()); }
         try { VoiceForwardRuntime.start(cl); } catch (Throwable t) { T("ARVF install-error " + t.getClass().getSimpleName()); }
         try { hookMessageWrites(cl); } catch (Throwable t) { T("msg write hook err " + t); }
         try { hookAddMsg(cl); } catch (Throwable t) { T("addmsg hook err " + t); }
@@ -6027,7 +6029,7 @@ static boolean wxVersionOk(Object actObj) {
     enum MenuAction {
         MARK_READ, CLEAR_CHATS, UNFOLLOW_BIZ, RP_GROUPS, RP_TOGGLE, RP_RECEIVE_MODE, RP_SETTINGS, RP_TEMPLATES, RP_HISTORY, RP_DELAY, TRANSFER_TOGGLE, TRANSFER_LISTS, TRANSFER_DELAY, ANTI_TOGGLE,
         REALNAME_TOGGLE, ORIGINAL_TOGGLE, NEWROOM_TOGGLE, CHECK_UPDATE, WISH,
-        SNS_TOGGLE, RESTART, DIAGNOSTICS, APK_UPDATE, ACTIVATION, DONATE, TABLET_MODE, TABLET_QR
+        SNS_TOGGLE, RESTART, DIAGNOSTICS, APK_UPDATE, ACTIVATION, DONATE, TABLET_MODE, TABLET_QR, ORIGINAL_DOWNLOAD, ORIGINAL_LISTS
     }
     enum MenuCategory {
         CHAT("聊天"), RED_PACKET("红包"), ANTI_RECALL("防撤回"), SUPPORT("设置与支持"), EXPERIMENTAL("实验功能");
@@ -6069,6 +6071,8 @@ static boolean wxVersionOk(Object actObj) {
                 addMenuAction(rows, MenuAction.UNFOLLOW_BIZ, "公众号取关");
                 addMenuAction(rows, MenuAction.REALNAME_TOGGLE, "");
                 addMenuAction(rows, MenuAction.ORIGINAL_TOGGLE, "");
+                addMenuAction(rows, MenuAction.ORIGINAL_DOWNLOAD, "");
+                addMenuAction(rows, MenuAction.ORIGINAL_LISTS, "原图下载黑白名单（个人 / 群聊）");
                 addMenuAction(rows, MenuAction.NEWROOM_TOGGLE, "");
                 break;
             case RED_PACKET:
@@ -6123,7 +6127,8 @@ static boolean wxVersionOk(Object actObj) {
             case ANTI_TOGGLE: item.label = "防撤回" + (imageRecallEnabled() ? "（高级版）" : "")
                     ; break;
             case REALNAME_TOGGLE: item.label = "真名"; break;
-            case ORIGINAL_TOGGLE: item.label = "原图"; break;
+            case ORIGINAL_TOGGLE: item.label = "发送原图"; break;
+            case ORIGINAL_DOWNLOAD: item.label = "自动下载原图"; break;
             case NEWROOM_TOGGLE: item.label = "新群免打扰"; break;
             case SNS_TOGGLE: item.label = "朋友圈防撤回"; break;
             default: break;
@@ -6144,7 +6149,7 @@ static boolean wxVersionOk(Object actObj) {
             case RP_SETTINGS: RedPacketSettings.show(act); break;
             case RP_TEMPLATES: RedPacketSettings.templates(act); break;
             case RP_HISTORY: RedPacketSettings.history(act); break;
-            case ANTI_TOGGLE: toggleFlag(AR_OFF_PATH, "防撤回", true); RecallMarkLayout.refresh(); break;
+            case ANTI_TOGGLE: toggleFlag(AR_OFF_PATH, "防撤回", true); RecallMarkLayout.refresh(); MediaRecallRuntime.settingsChanged(); break;
             case REALNAME_TOGGLE:
                 toggleFlag(RN_OFF_PATH, "群成员真名", true);
                 // v196：立刻生效，不等下一次轮询
@@ -6159,6 +6164,8 @@ static boolean wxVersionOk(Object actObj) {
                 }
                 break;
             case ORIGINAL_TOGGLE: toggleFlag(ORIG_OFF_PATH, "原图发送", true); break;
+            case ORIGINAL_DOWNLOAD: ReceiptSettings.toggle(act,ReceiptConfig.Feature.ORIGINAL_IMAGE,refresh); OriginalImageRuntime.settingsChanged(); break;
+            case ORIGINAL_LISTS: ReceiptSettings.lists(act,ReceiptConfig.Feature.ORIGINAL_IMAGE); break;
             case NEWROOM_TOGGLE: toggleFlag(NEWROOM_ON_PATH, "新群免打扰"); break;
             case SNS_TOGGLE: toggleFlag(WXDIR + "sns.keep.del.on", "朋友圈防撤回"); break;
             case CHECK_UPDATE:
@@ -6199,6 +6206,7 @@ static boolean wxVersionOk(Object actObj) {
             case ANTI_TOGGLE:return !f(AR_OFF_PATH);
             case REALNAME_TOGGLE:return !f(RN_OFF_PATH);
             case ORIGINAL_TOGGLE:return !f(ORIG_OFF_PATH);
+            case ORIGINAL_DOWNLOAD:return ReceiptSettings.enabled(ReceiptConfig.Feature.ORIGINAL_IMAGE);
             case NEWROOM_TOGGLE:return f(NEWROOM_ON_PATH);
             case SNS_TOGGLE:return f(WXDIR+"sns.keep.del.on");
             case TABLET_MODE:return "1".equals(callMainStr("tabletModeConfigured"));
@@ -6279,7 +6287,7 @@ static boolean wxVersionOk(Object actObj) {
                             final MenuEntry entry=getItem(position);refreshMenuLabelSafe(entry);
                             Boolean checked=menuToggleValue(entry);
                             if(checked!=null) {
-                                String detail=entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TRANSFER_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.TRANSFER):entry.action==MenuAction.TABLET_MODE?"开启或关闭后需重启微信，登录页生效":"";
+                                String detail=entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TRANSFER_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.TRANSFER):entry.action==MenuAction.TABLET_MODE?"开启或关闭后需重启微信，登录页生效":entry.action==MenuAction.ORIGINAL_DOWNLOAD?"收到图片后自动下载可用原图，独立于防撤回":"";
                                 SettingsUi.ToggleRow row=SettingsUi.toggle(act,entry.label,detail,checked.booleanValue(),new SettingsUi.Change() {
                                     public boolean set(boolean on) { boolean saved=setMenuToggle(act,entry,on,tVer,renderMenu[0]);notifyDataSetChanged();return saved; }
                                 });

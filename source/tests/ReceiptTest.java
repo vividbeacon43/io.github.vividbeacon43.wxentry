@@ -33,8 +33,17 @@ public class ReceiptTest {
   check(!transfer.enabled && !transfer.delayEnabled && transfer.group.rule==ReceiptConfig.Rule.ALL,"new transfer defaults off with independent rules/delay");
   transfer.enabled=true;transfer.person.rule=ReceiptConfig.Rule.BLACK;transfer.person.black.add("peer");ReceiptStore.save(ReceiptConfig.Feature.TRANSFER,"self",transfer);
   check(ReceiptStore.current(ReceiptConfig.Feature.RED_PACKET).group.white.contains("old@chatroom"),"transfer edit cannot modify red list");
-  w41.z1.current="other";check(!ReceiptStore.current(ReceiptConfig.Feature.RED_PACKET).enabled&&!ReceiptStore.current(ReceiptConfig.Feature.TRANSFER).enabled,"new account does not inherit enabled flags or rules");w41.z1.current="self";
+  ReceiptConfig originals=ReceiptStore.current(ReceiptConfig.Feature.ORIGINAL_IMAGE);
+  check(!originals.enabled&&originals.person.rule==ReceiptConfig.Rule.ALL,"original image automation defaults off independently");
+  originals.enabled=true;originals.person.rule=ReceiptConfig.Rule.WHITE;originals.person.white.add("peer");originals.group.rule=ReceiptConfig.Rule.BLACK;originals.group.black.add("blocked@chatroom");ReceiptStore.save(ReceiptConfig.Feature.ORIGINAL_IMAGE,"self",originals);
+  check(ReceiptStore.permits(ReceiptConfig.Feature.ORIGINAL_IMAGE,"self","peer")&&!ReceiptStore.permits(ReceiptConfig.Feature.ORIGINAL_IMAGE,"self","other"),"original personal whitelist filters download eligibility");
+  check(ReceiptStore.permits(ReceiptConfig.Feature.ORIGINAL_IMAGE,"self","allowed@chatroom")&&!ReceiptStore.permits(ReceiptConfig.Feature.ORIGINAL_IMAGE,"self","blocked@chatroom"),"original group blacklist separate from personal whitelist");
+  check(ReceiptStore.current(ReceiptConfig.Feature.RED_PACKET).group.white.contains("old@chatroom")&&ReceiptStore.current(ReceiptConfig.Feature.TRANSFER).person.black.contains("peer"),"original rules do not modify red packet or transfer lists");
+  originals.person.setList(false,true);originals.person.black.add("peer");ReceiptStore.save(ReceiptConfig.Feature.ORIGINAL_IMAGE,"self",originals);
+  check(!ReceiptStore.permits(ReceiptConfig.Feature.ORIGINAL_IMAGE,"self","peer")&&ReceiptStore.permits(ReceiptConfig.Feature.ORIGINAL_IMAGE,"self","other")&&ReceiptStore.current(ReceiptConfig.Feature.ORIGINAL_IMAGE).person.rule==ReceiptConfig.Rule.BLACK,"original black switch replaces white while preserving both saved lists");
+  w41.z1.current="other";check(!ReceiptStore.current(ReceiptConfig.Feature.RED_PACKET).enabled&&!ReceiptStore.current(ReceiptConfig.Feature.TRANSFER).enabled&&!ReceiptStore.current(ReceiptConfig.Feature.ORIGINAL_IMAGE).enabled,"new account does not inherit enabled flags or rules");w41.z1.current="self";
   RedPacketRuntime.write(ReceiptStore.path(ReceiptConfig.Feature.TRANSFER,"self"),"broken");check(!ReceiptStore.enabled(ReceiptConfig.Feature.TRANSFER),"corrupt setting disables automation");
+  RedPacketRuntime.write(ReceiptStore.path(ReceiptConfig.Feature.ORIGINAL_IMAGE,"self"),"broken");check(!ReceiptStore.enabled(ReceiptConfig.Feature.ORIGINAL_IMAGE)&&!ReceiptStore.permits(ReceiptConfig.Feature.ORIGINAL_IMAGE,"self","peer"),"corrupt original rules deny downloads");
   List<ReceiptTargets.Target> all=Arrays.asList(new ReceiptTargets.Target("a","A",10),new ReceiptTargets.Target("b","B",200),new ReceiptTargets.Target("r@chatroom","R",500));
   Set<String> saved=new HashSet<>(Arrays.asList("missing","a"));List<ReceiptTargets.Target> people=ReceiptTargets.withSaved(all,saved,ReceiptConfig.Scope.PERSON);
   check(people.size()==3&&people.get(0).id.equals("b")&&people.get(2).id.equals("missing"),"categories sorted recent first and saved unavailable contacts retained");

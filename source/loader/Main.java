@@ -69,8 +69,8 @@ public class Main implements IXposedHookLoadPackage {
     static final String URL_MANIFEST = BASE + "kernel/manifest";
     static final String URL_KERNEL   = BASE + "kernel/download";
     // === 1.43：模块 APK 自身更新 + 内核自动更新/回滚 ===
-    static final int MY_VC = 97;                       // 由 release.py 打包时改写
-    static final String MY_VN = "1.97";
+    static final int MY_VC = 99;                       // 由 release.py 打包时改写
+    static final String MY_VN = "1.99";
     static final String URL_APK_MANIFEST = BASE + "apk.json";
     static final String URL_APK = BASE + "wxentry.apk";
     static final String APK_PENDING = DIR + "apk.pending";
@@ -1054,7 +1054,7 @@ public class Main implements IXposedHookLoadPackage {
 
     /** 取内核明文：优先本地缓存（解密+校验），否则联网拉取 */
     // ---------------- 自检 / 诊断 ----------------
-    static final String APP_VER = "1.97";
+    static final String APP_VER = "1.99";
     static volatile boolean READY_STARTED = false;   // onWeChatReady 只跑一次
     static final File BOOTLOG = new File(DIR + "boot.log");
     static final File BOOTPREV = new File(DIR + "boot.prev");
