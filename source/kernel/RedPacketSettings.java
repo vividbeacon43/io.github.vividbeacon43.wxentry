@@ -12,9 +12,9 @@ final class RedPacketSettings {
         toast(act,"此功能需要高级版或 VIP 版");return false;
     }
     static void mode(final Activity act,final Runnable refresh) {
-        if(Kernel.freeRedPacketManualOnly()) {
+        if(Kernel.freeRedPacketForegroundOnly()) {
             new AlertDialog.Builder(act).setTitle("免费版红包领取")
-                .setMessage("手动点开红包后自动点击拆包；没有点开红包时不会打开或领取。")
+                .setMessage("收到符合名单设置的红包后，自动拉起微信领取页面并点击拆包；不使用静默领取。")
                 .setPositiveButton("知道了",null).show();return;
         }
         final int selected=RedPacketRuntime.silentSelected()?1:0;

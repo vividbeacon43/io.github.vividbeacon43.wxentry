@@ -43,6 +43,17 @@ public class TransferTest {
   c.person.rule=ReceiptConfig.Rule.ALL;ReceiptStore.save(ReceiptConfig.Feature.TRANSFER,"self",c);
   for(String edition:new String[]{"free","pro"}){Kernel.edition=Kernel.authorized=edition;receive("tier-"+edition);check(zp0.j1.holder.b.submitted==submitted,"transfer inaccessible to "+edition);}
   Kernel.edition=Kernel.authorized="plus";
+  String actual=xml("actual-card").replace("<total_fee>123</total_fee>","<feedesc><![CDATA[￥1.23]]></feedesc>").replace("<fee_type>CNY</fee_type>","");
+  TransferEngine.Packet actualPacket=TransferEngine.parse("self","peer",actual,false);
+  check(actualPacket!=null&&actualPacket.cents==-1,"native card without total_fee or fee_type uses unknown amount until native query");
+  TransferRuntime.received(actual,"peer",System.currentTimeMillis());Handler.advance(1000);check(last() instanceof h1,"native shape card reaches query");
+  callback(last(),query(2000),0);check(last() instanceof n0&&((n0)last()).arguments[2].equals(123),"confirmation uses checked native amount, never missing card sentinel");
+  callback(last(),new JSONObject(),0);callback(last(),query(2001),0);check(Kernel.lastToast.contains("1.23"),"native query amount used in verified receipt");
+  String changed=actual.replace("actual-card","changed-amount");TransferRuntime.received(changed,"peer",System.currentTimeMillis());Handler.advance(1000);
+  callback(last(),query(2000),0);callback(last(),new JSONObject(),0);submitted=zp0.j1.holder.b.submitted;
+  callback(last(),query(2001).put("fee",124),0);check(zp0.j1.holder.b.submitted==submitted&&RedPacketRuntime.history().contains("不匹配"),"verification rejects changed native amount after confirmation");
+  for(long amount:new long[]{0,-1,2147483648L}){String badCard=actual.replace("actual-card","bad-amount-"+amount);TransferRuntime.received(badCard,"peer",System.currentTimeMillis());Handler.advance(1000);submitted=zp0.j1.holder.b.submitted;callback(last(),query(2000).put("fee",amount),0);check(zp0.j1.holder.b.submitted==submitted,"missing card amount never bypasses invalid native amount "+amount);}
+  String noFee=actual.replace("actual-card","bad-currency");TransferRuntime.received(noFee,"peer",System.currentTimeMillis());Handler.advance(1000);submitted=zp0.j1.holder.b.submitted;callback(last(),query(2000).put("fee_type","USD"),0);check(zp0.j1.holder.b.submitted==submitted,"native currency still verified when card omits it");
   c.minDelayMs=c.maxDelayMs=60000;ReceiptStore.save(ReceiptConfig.Feature.TRANSFER,"self",c);TransferRuntime.received(xml("long"),"peer",System.currentTimeMillis());Handler.advance(59999);check(zp0.j1.holder.b.submitted==submitted,"long seconds delay not shortened by response timeout");Handler.advance(1);check(zp0.j1.holder.b.submitted==submitted+1,"long delay starts query at 60 seconds");
   Handler.advance(45000);submitted=zp0.j1.holder.b.submitted;callback(last(),query(2000),0);check(zp0.j1.holder.b.submitted==submitted,"late query callback never confirms");
   RedPacketEngine.Attempt red=new RedPacketEngine.Attempt(RedPacketEngineTest.packet("bus"),true,Long.MAX_VALUE);

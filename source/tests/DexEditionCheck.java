@@ -41,7 +41,7 @@ public final class DexEditionCheck {
         Map<String,String> values=new HashMap<>();
         for(Field f:kernel.getStaticFields())if(f.getInitialValue() instanceof StringEncodedValue)
             values.put(f.getName(),((StringEncodedValue)f.getInitialValue()).getValue());
-        if(!args[1].equals(values.get("EDITION"))||!"240".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
+        if(!args[1].equals(values.get("EDITION"))||!"244".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
         for(String name:new String[]{"RedPacketPolicy","RedPacketEngine","RedPacketNative","RedPacketRuntime","RedPacketSettings"})
             if(!red.contains(root+name+";"))throw new AssertionError("Red packet runtime missing: "+name);
         boolean nativeTip=false;
@@ -71,6 +71,19 @@ public final class DexEditionCheck {
         Boolean tabletPremium=null;
         for(Field f:kernel.getStaticFields())if(f.getName().equals("TABLET_PREMIUM_EDITION")&&f.getInitialValue() instanceof BooleanEncodedValue)tabletPremium=((BooleanEncodedValue)f.getInitialValue()).getValue();
         if(tabletPremium==null||tabletPremium.booleanValue()!=premium)throw new AssertionError("Tablet paid kernel boundary failed");
+        boolean snsForward=receiptClasses.contains(root+"SnsForwardRuntime;");
+        if(snsForward!=premium)throw new AssertionError("SNS forwarding must be advanced/VIP only");
+        if(premium)for(String name:new String[]{"SnsForwardDraft","SnsForwardFiles","SnsForwardComposer","SnsForwardNative"})if(!receiptClasses.contains(root+name+";"))throw new AssertionError("SNS draft runtime missing");
+        boolean editorHandoff=false;
+        for(ClassDef c:dex.getClasses())if(c.getType().startsWith(root+"SnsForward"))for(Method m:c.getMethods())if(m.getImplementation()!=null)for(Instruction i:m.getImplementation().getInstructions())if(i instanceof ReferenceInstruction){
+            Reference ref=((ReferenceInstruction)i).getReference();
+            if(ref instanceof MethodReference){MethodReference call=(MethodReference)ref;String name=call.getName();
+                if(name.equals("performClick")||name.equals("callOnClick")||name.equals("sendBroadcast")||call.getDefiningClass().equals("Lcom/tencent/mm/modelbase/s1;"))throw new AssertionError("SNS draft must not invoke publication/input APIs");
+                if(name.equals("startActivity"))editorHandoff=true;
+            }
+            if(ref instanceof StringReference){String value=((StringReference)ref).getString();if(value.equals("com.tencent.mm.plugin.sns.model.y7")||value.equals("com.tencent.mm.autogen.events.SnsRepostEvent")||value.equals("Kis_retry_edit")||value.equals("Kis_from_sns_drafg_stg"))throw new AssertionError("SNS post/retry protocol must not be copied");}
+        }
+        if(editorHandoff!=premium)throw new AssertionError("SNS editor handoff boundary failed");
         if(images!=premium||cache!=premium)throw new AssertionError("Image boundary changed");
         boolean voiceStart=false,forwardStart=false,imageStart=false,recallMarkStart=false,mediaStart=false,originalStart=false;
         Set<String> methods=new HashSet<>();
@@ -110,7 +123,7 @@ public final class DexEditionCheck {
                 if(ref instanceof MethodReference && ((MethodReference)ref).getDefiningClass().equals(root+"TransferRuntime;") && ((MethodReference)ref).getName().equals("start"))transferStart=true;
             }
         if(!transferStart)throw new AssertionError("Transfer runtime not started");
-        if(!methods.contains("receiptAccount") || !methods.contains("freeRedPacketManualOnly"))throw new AssertionError("Receipt account/free gate missing");
+        if(!methods.contains("receiptAccount") || !methods.contains("freeRedPacketForegroundOnly"))throw new AssertionError("Receipt account/free gate missing");
         if(!methods.contains("redPacketPremiumEnabled"))throw new AssertionError("Red packet authorization gate missing");
         boolean singleChoice=false,multiChoice=false,frontLabel=false,silentLabel=false;
         for(Method m:settings.getMethods())if(m.getName().equals("mode") && m.getImplementation()!=null)
@@ -124,6 +137,6 @@ public final class DexEditionCheck {
                 }
             }
         if(!singleChoice || multiChoice || !frontLabel || !silentLabel)throw new AssertionError("Receive mode is not an explicit mutually exclusive picker");
-        System.out.println("PASS edition="+args[1]+" BUILD=240 voice=true forward=true receipt=true redpacket_premium="+premium+" receive_mode="+(args[1].equals("free")?"manual-open-only":"single-choice")+" image="+premium+" tablet_premium="+premium+" media_prefetch=true original_download=true");
+        System.out.println("PASS edition="+args[1]+" BUILD=244 voice=true forward=true receipt=true redpacket_premium="+premium+" receive_mode="+(args[1].equals("free")?"foreground-auto-open":"single-choice")+" image="+premium+" tablet_premium="+premium+" media_prefetch=true original_download=true");
     }
 }

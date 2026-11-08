@@ -59,11 +59,11 @@ final class TransferEngine {
     }
     static boolean identity(Packet p,Query q) {
         return q!=null && q.error==0 && !q.isPayer && p.account.equals(q.receiver) && p.sender.equals(q.sender)
-                && p.cents==q.cents && ("CNY".equals(q.currency) || "1".equals(q.currency));
+                && q.cents>0 && q.cents<=Integer.MAX_VALUE && (p.cents<0 || p.cents==q.cents) && ("CNY".equals(q.currency) || "1".equals(q.currency));
     }
     synchronized void queried(Attempt a,Query q) {
         if(!live(a) || (a.stage!=Stage.QUERY && a.stage!=Stage.VERIFY))return;
-        if(!identity(a.packet,q)) { finish(a,"转账身份、金额或查询结果不匹配，未自动确认",false);return; }
+        if(!identity(a.packet,q) || a.acceptedQuery!=null && a.acceptedQuery.cents!=q.cents) { finish(a,"转账身份、金额或查询结果不匹配，未自动确认",false);return; }
         if(a.stage==Stage.VERIFY) {
             finish(a,q.status==2001 && !q.needsAction?"转账接收成功":"未确认转账到账，请在微信中查看",q.status==2001 && !q.needsAction);return;
         }
@@ -125,8 +125,9 @@ final class TransferEngine {
             if(group) { if(!account.equals(receiver) || !prefix.isEmpty() && !prefix.equals(sender))return null; }
             else { if(!sender.equals(talker))return null;if(receiver.isEmpty())receiver=account; }
             if(!receiver.equals(account))return null;
-            int cents=Integer.parseInt(child(pay,"total_fee",true));if(cents<=0)return null;
-            String currency=child(pay,"fee_type",true);if(!currency.equals("CNY") && !currency.equals("1"))return null;
+            // Actual native cards can omit both fields. The bound native query is authoritative.
+            String amount=child(pay,"total_fee",false);int cents=amount.isEmpty()?-1:Integer.parseInt(amount);if(!amount.isEmpty()&&cents<=0)return null;
+            String currency=child(pay,"fee_type",false);if(!currency.isEmpty()&&!currency.equals("CNY")&&!currency.equals("1"))return null;
             String invalid=child(pay,"invalidtime",false);int expiry=invalid.isEmpty()?0:Integer.parseInt(invalid);if(expiry<0)return null;
             String attach=child(pay,"attach",false);if(attach.length()>8192)return null;
             return new Packet(account,talker,sender,receiver,transaction,transfer,cents,expiry,attach);

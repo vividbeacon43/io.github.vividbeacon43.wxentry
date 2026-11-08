@@ -24,7 +24,8 @@ public final class MediaRuntimeBehaviorTest {
    reset();MediaNative.msg.type=49;MediaNative.msg.appType=2001;ok(!revoke(),"red packet not treated as file");
    reset();MediaNative.msg=null;ok(!revoke(),"self/missing identity unresolved by native reader stays native");
    reset();Kernel.off=true;ok(OriginalImageRuntime.enabled(),"original downloader independent of anti-recall toggle");OriginalImageRuntime.Job j=job();OriginalImageRuntime.request(j);
-   ok(MediaNative.manager.requests==1&&MediaNative.manager.type==1&&MediaNative.manager.id==81,"native original record and type 1 selected");
+   ok(MediaNative.manager.requests==1&&MediaNative.manager.type==1&&MediaNative.manager.id==81,"native viewer main row and type1 selected, never HD child181");
+   ok(MediaNative.manager.id!=((MediaNative.Info)MediaNative.originalInfo(null)).a,"distinct HD child row cannot be passed as main download row");
    ok(j.running,"native download tracked until a genuine callback");OriginalImageRuntime.detach(j);ok(MediaNative.manager.cancels==1&&MediaNative.manager.cancelType==1,"detach only our original-mode listener");
    reset();ReceiptStore.allow=false;j=job();OriginalImageRuntime.request(j);ok(MediaNative.manager.requests==0,"blacklist or unmatched whitelist blocks submission");
    reset();j=job();Kernel.owner="other-account";OriginalImageRuntime.request(j);ok(MediaNative.manager.requests==0,"account switch after queueing blocks submission");
@@ -32,6 +33,8 @@ public final class MediaRuntimeBehaviorTest {
    reset();j=job();MediaNative.originalDone=true;OriginalImageRuntime.request(j);ok(j.done&&MediaNative.manager.requests==0,"existing completed original does not download twice");
    reset();j=job();MediaNative.compressedDone=true;OriginalImageRuntime.request(j);ok(MediaNative.manager.requests==1&&!j.done,"compressed image completion is not mistaken for original completion");OriginalImageRuntime.detach(j);
    reset();j=job();Kernel.MODULE_OFF=true;OriginalImageRuntime.request(j);ok(MediaNative.manager.requests==0,"module disable blocks independent original mode");
+   reset();MediaNative.msg.type=3;MediaNative.msg.received=System.currentTimeMillis()-3600000L;j=new OriginalImageRuntime.Job(MediaNative.msg);OriginalImageRuntime.jobs.put(j.key,j);ok(!OriginalImageRuntime.alive(j),"historical messages are not bulk auto-downloaded");
+   j=new OriginalImageRuntime.Job(MediaNative.msg,System.currentTimeMillis());OriginalImageRuntime.jobs.put(j.key,j);ok(OriginalImageRuntime.alive(j),"explicitly opened historical image gets bounded preparation window");OriginalImageRuntime.request(j);ok(MediaNative.manager.requests==1&&MediaNative.manager.id==81,"viewer-triggered original uses same checked main image request");OriginalImageRuntime.detach(j);
    System.out.println("PASS "+checks+" native media interception, original mode, queued list/owner and failure behavior checks");
   }finally{MediaRecallRuntime.io.shutdownNow();OriginalImageRuntime.io.shutdownNow();}
  }

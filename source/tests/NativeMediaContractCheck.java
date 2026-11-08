@@ -3,7 +3,7 @@ import com.android.tools.smali.dexlib2.*;import com.android.tools.smali.dexlib2.
 
 public class NativeMediaContractCheck extends NativeTabletContractCheck {
  public static void main(String[] args)throws Exception{
-  Set<String> names=new HashSet<>(Arrays.asList("w41.u","n71.b2","n71.u1","rb5.q","fj0.d","ql5.g","com.tencent.mm.pluginsdk.model.app.v5","com.tencent.mm.pluginsdk.model.app.e","com.tencent.mm.pluginsdk.model.app.d","lm.s","xx0.r","yx0.k0","g61.a0","g61.b0","g61.k0","g61.j","mc0.b","jv5.e0","com.tencent.mm.vfs.z6"));
+  Set<String> names=new HashSet<>(Arrays.asList("w41.u","n71.b2","n71.u1","rb5.q","fj0.d","ql5.g","com.tencent.mm.pluginsdk.model.app.v5","com.tencent.mm.pluginsdk.model.app.e","com.tencent.mm.pluginsdk.model.app.d","lm.s","xx0.r","yx0.k0","g61.a0","g61.b0","g61.k0","g61.j","mc0.b","jv5.e0","com.tencent.mm.vfs.z6","com.tencent.mm.ui.chatting.gallery.u1","com.tencent.mm.ui.chatting.gallery.d3","com.tencent.mm.ui.chatting.gallery.e","com.tencent.mm.ui.chatting.gallery.ImageGalleryUI"));
   try(ZipFile z=new ZipFile(args[0])){Enumeration<? extends ZipEntry> es=z.entries();while(es.hasMoreElements()){ZipEntry e=es.nextElement();if(!e.getName().matches("classes[0-9]*\\.dex"))continue;DexBackedDexFile dex=DexBackedDexFile.fromInputStream(Opcodes.getDefault(),new BufferedInputStream(z.getInputStream(e)));for(ClassDef c:dex.getClasses())if(names.contains(c.getType().substring(1,c.getType().length()-1).replace('/','.')))classes.put(c.getType(),c);}}
   String msg=type("com.tencent.mm.storage.f9"),info=type("n71.u1"),image=type("g61.a0"),id=type("com.tencent.mm.plugin.msg.MsgIdTalker"),callback=type("ma0.w");
   Method revoke=method("w41.u","c","V","Ljava/lang/String;","J",type("com.tencent.mm.modelbase.p0"),"Ljava/lang/String;","Ljava/lang/String;","Ljava/lang/String;");
@@ -23,6 +23,12 @@ public class NativeMediaContractCheck extends NativeTabletContractCheck {
   field("g61.a0","a","J");field("g61.a0","q","J");field("g61.a0","d","I");method("g61.a0","k","Z");method("g61.a0","l","Z");
   Method original=method("g61.b0","d",image,image);calls(original,"g61.a0","k");calls(original,"g61.k0","u3");
   method("g61.k0","s4","Ljava/lang/String;","Ljava/lang/String;",image);field("jv5.e0","g",type("jv5.e0"));method("mc0.b","Mj","Ljava/lang/String;",msg,type("jv5.e0"),"Ljava/lang/String;","Ljava/lang/String;","Ljava/lang/String;");
+  Method viewer=method("com.tencent.mm.ui.chatting.gallery.u1","b0","V","I","Z");calls(viewer,"g61.j","b");calls(method("com.tencent.mm.ui.chatting.gallery.d3","x",image,msg,"Z"),"g61.k0","K3");
+  method("com.tencent.mm.ui.chatting.gallery.d3","x",image,msg,"Z");
+  field("com.tencent.mm.ui.chatting.gallery.e","d",type("com.tencent.mm.ui.chatting.gallery.u1"));
+  field("com.tencent.mm.ui.chatting.gallery.u1","g",type("com.tencent.mm.ui.chatting.gallery.ImageGalleryUI"));method("com.tencent.mm.ui.chatting.gallery.u1","v",msg);
+  field("com.tencent.mm.ui.chatting.gallery.ImageGalleryUI","D","J");field("com.tencent.mm.ui.chatting.gallery.ImageGalleryUI","E","Ljava/lang/String;");
+  method("com.tencent.mm.ui.chatting.gallery.ImageGalleryUI","A9","Z");method("com.tencent.mm.ui.chatting.gallery.ImageGalleryUI","Ba","V","Z");
   System.out.println("PASS "+checks+" native video/file revoke, download, path and original image contracts");
  }
 }

@@ -27,7 +27,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "240";
+    static final String BUILD = "244";
     public static final String EDITION = "vip";
     static final boolean RP_PREMIUM_EDITION = true;
     static final boolean TABLET_PREMIUM_EDITION = true;
@@ -493,6 +493,7 @@ static boolean wxVersionOk(Object actObj) {
         try { hookFileDelete(cl); } catch (Throwable t) { T("file delete hook err " + t); }
         try { hookAutoDownload(cl); } catch (Throwable t) { T("autodl hook err " + t); }
         try { ImageRecallRuntime.start(cl); } catch (Throwable t) { T("ARIMG install-error " + t.getClass().getSimpleName()); }
+        try { SnsForwardRuntime.start(cl); } catch (Throwable t) { T("ARSNSFORWARD install-error " + t.getClass().getSimpleName()); }
         try { hookImgProbe(cl); } catch (Throwable t) { T("imgprobe hook err " + t); }
         try { hookD3(cl); } catch (Throwable t) { T("d3 probe hook err " + t); }
         try { hookCfgForce(cl); } catch (Throwable t) { T("cfg hook err " + t); }
@@ -912,14 +913,19 @@ static boolean wxVersionOk(Object actObj) {
             }
             T("rp insert hooks: " + n);
 
-            Class<?> ui = XposedHelpers.findClass(
-                    "com.tencent.mm.plugin.luckymoney.ui.LuckyMoneyNotHookReceiveUI", cl);
-            XposedHelpers.findAndHookMethod(ui, "onCreate", Bundle.class, new XC_MethodHook() {
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    RedPacketRuntime.legacyUi((Activity) param.thisObject);
-                }
-            });
-            T("rp ui hook ok");
+            int uiHooks=0;
+            for(String uiName:new String[]{"LuckyMoneyNotHookReceiveUI","LuckyMoneyNewReceiveUI"}) {
+                try {
+                    Class<?> ui = XposedHelpers.findClass("com.tencent.mm.plugin.luckymoney.ui."+uiName, cl);
+                    XposedHelpers.findAndHookMethod(ui, "onCreate", Bundle.class, new XC_MethodHook() {
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            RedPacketRuntime.legacyUi((Activity) param.thisObject);
+                        }
+                    });
+                    uiHooks++;T("rp ui hook ok "+uiName);
+                } catch(Throwable failure) { T("rp ui hook unavailable "+uiName+" "+failure.getClass().getSimpleName()); }
+            }
+            T("rp receive ui hooks: "+uiHooks);
         } catch (Throwable t) { if (VB()) T("rp hook failed " + t); }
     }
 
@@ -6119,8 +6125,8 @@ static boolean wxVersionOk(Object actObj) {
     }
     static void refreshMenuLabel(MenuEntry item) {
         switch (item.action) {
-            case RP_TOGGLE: item.label = (freeRedPacketManualOnly()?"手动打开后自动拆包":"自动领取红包"); break;
-            case RP_RECEIVE_MODE: item.label = "领取方式：" + (freeRedPacketManualOnly()?"手动打开后自动拆包":RedPacketRuntime.silentSelected() ? "后台静默领取" : "前台自动点领取"); break;
+            case RP_TOGGLE: item.label = (freeRedPacketForegroundOnly()?"前台自动拉起并拆包":"自动领取红包"); break;
+            case RP_RECEIVE_MODE: item.label = "领取方式：" + (freeRedPacketForegroundOnly()?"前台自动拉起并拆包":RedPacketRuntime.silentSelected() ? "后台静默领取" : "前台自动点领取"); break;
             case RP_DELAY: item.label="红包随机延时"; break;
             case TRANSFER_TOGGLE: item.label="自动接收转账（高级版）"; break;
             case TRANSFER_DELAY: item.label="转账随机延时"; break;
@@ -6287,7 +6293,7 @@ static boolean wxVersionOk(Object actObj) {
                             final MenuEntry entry=getItem(position);refreshMenuLabelSafe(entry);
                             Boolean checked=menuToggleValue(entry);
                             if(checked!=null) {
-                                String detail=entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TRANSFER_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.TRANSFER):entry.action==MenuAction.TABLET_MODE?"开启或关闭后需重启微信，登录页生效":entry.action==MenuAction.ORIGINAL_DOWNLOAD?"收到图片后自动下载可用原图，独立于防撤回":"";
+                                String detail=entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TRANSFER_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.TRANSFER):entry.action==MenuAction.TABLET_MODE?"开启或关闭后需重启微信，登录页生效":entry.action==MenuAction.ORIGINAL_DOWNLOAD?"收到或打开图片时按名单下载可用原图，独立于防撤回":"";
                                 SettingsUi.ToggleRow row=SettingsUi.toggle(act,entry.label,detail,checked.booleanValue(),new SettingsUi.Change() {
                                     public boolean set(boolean on) { boolean saved=setMenuToggle(act,entry,on,tVer,renderMenu[0]);notifyDataSetChanged();return saved; }
                                 });
@@ -7002,7 +7008,7 @@ static boolean wxVersionOk(Object actObj) {
     }
 
     // ===== 防撤回：别让微信把刚收到不久的图片/视频删掉 =====
-    static boolean freeRedPacketManualOnly() { return "free".equals(EDITION); }
+    static boolean freeRedPacketForegroundOnly() { return "free".equals(EDITION); }
     static String receiptAccount() {
         try { return String.valueOf(XposedHelpers.callStaticMethod(XposedHelpers.findClass("w41.z1",APP_CL),"u")); }
         catch(Throwable unavailable) { return ""; }
@@ -7010,6 +7016,7 @@ static boolean wxVersionOk(Object actObj) {
     static boolean redPacketPremiumEnabled() {
         return RP_PREMIUM_EDITION && RedPacketPolicy.premium(EDITION, callMainStr("currentKernelEdition"), MODULE_OFF);
     }
+    static boolean snsForwardEnabled() {return !MODULE_OFF && ("plus".equals(EDITION)||"vip".equals(EDITION)) && "1".equals(callMainStr2("imageFeatureEnabledFor", EDITION));}
     static boolean imageRecallEnabled() {
         return !MODULE_OFF && !f(AR_OFF_PATH) && "1".equals(callMainStr2("imageFeatureEnabledFor", EDITION));
     }

@@ -72,7 +72,9 @@ public final class RedPacketRuntimeTest {
         config=ReceiptStore.current(ReceiptConfig.Feature.RED_PACKET);config.group.rule=ReceiptConfig.Rule.OFF;ReceiptStore.save(ReceiptConfig.Feature.RED_PACKET,"self",config);
         receive("group-filter");check(zp0.j1.holder.b.submitted==submitted,"personal/group rules independently applied");
         config.group.rule=ReceiptConfig.Rule.WHITE;ReceiptStore.save(ReceiptConfig.Feature.RED_PACKET,"self",config);
-        receive("whitelist");check(zp0.j1.holder.b.submitted==submitted,"empty active whitelist blocks group");
+        receive("whitelist");check(zp0.j1.holder.b.submitted==submitted+1,"enabled empty active whitelist permits group");submitted=zp0.j1.holder.b.submitted;
+        config.group.white.add("selected@chatroom");ReceiptStore.save(ReceiptConfig.Feature.RED_PACKET,"self",config);
+        receive("not-selected");check(zp0.j1.holder.b.submitted==submitted,"populated white list permits only selected group");
         config.group.rule=ReceiptConfig.Rule.ALL;ReceiptStore.save(ReceiptConfig.Feature.RED_PACKET,"self",config);
         RedPacketRuntime.received(url("history"),10,"room@chatroom",System.currentTimeMillis()-3600000);Handler.advance(1000);
         check(zp0.j1.holder.b.submitted==submitted,"historical sync not claimed");
@@ -113,7 +115,12 @@ public final class RedPacketRuntimeTest {
         }
         Kernel.edition=Kernel.authorized="free";launched=Kernel.launched;submitted=zp0.j1.holder.b.submitted;int clicks=Kernel.clicked;
         receive("free-arrival");Handler.advance(1000);
-        check(Kernel.launched==launched && Kernel.clicked==clicks && zp0.j1.holder.b.submitted==submitted,"free arrival never launches, clicks or submits native query");
+        check(Kernel.launched==launched+1 && Kernel.clicked==clicks && zp0.j1.holder.b.submitted==submitted,"free arrival launches visible UI without silent submission");
+        check(!RedPacketRuntime.silentSelected()&&!RedPacketRuntime.selectMode(RedPacketPolicy.Mode.SILENT),"free cannot use stale or selected silent mode");
+        launched=Kernel.launched;
+        android.app.Activity freeAuto=new com.tencent.mm.plugin.luckymoney.ui.LuckyMoneyNewReceiveUI();freeAuto.intent.url=url("free-arrival");
+        RedPacketRuntime.legacyUi(freeAuto);Handler.advance(0);check(Kernel.clicked==clicks+1,"free owned new UI opens without applying seconds delay twice");
+        Handler.advance(1000);check(Kernel.clicked==clicks+1,"free owned new UI clicks only once");clicks=Kernel.clicked;
         android.app.Activity freeManual=new android.app.Activity();freeManual.intent.url=url("free-manual");freeManual.button=false;
         RedPacketRuntime.legacyUi(freeManual);Handler.advance(500);check(Kernel.clicked==clicks,"manual view waits for visible open button");
         freeManual.button=true;Handler.advance(150);check(Kernel.clicked==clicks+1,"free manual page clicks without RP_SEEN ownership");
@@ -126,6 +133,19 @@ public final class RedPacketRuntimeTest {
         android.app.Activity disabled=new android.app.Activity();disabled.intent.url=url("free-disabled");RedPacketRuntime.legacyUi(disabled);Handler.advance(1000);
         check(Kernel.clicked==clicks+1,"free disabled switch blocks manual auto-click");
         config.enabled=true;ReceiptStore.save(ReceiptConfig.Feature.RED_PACKET,"self",config);
+        android.app.Activity freeNew=new com.tencent.mm.plugin.luckymoney.ui.LuckyMoneyNewReceiveUI();freeNew.intent.url=url("free-new-ui");
+        int newClicks=Kernel.clicked;RedPacketRuntime.legacyUi(freeNew);Handler.advance(499);
+        check(Kernel.clicked==newClicks,"new receive UI honors configured seconds delay");Handler.advance(1);
+        check(Kernel.clicked==newClicks+1,"new receive UI follows manual-open automatic split path");
+        Handler.advance(1000);check(Kernel.clicked==newClicks+1,"new receive UI automatically clicks only once");
+        check(Kernel.launched==launched,"new receive UI support never automatically launches a packet page");
+        check(Kernel.logs.toString().contains("page=LuckyMoneyNewReceiveUI"),"manual new receive UI gets targeted diagnostics");
+        Kernel.edition=Kernel.authorized="plus";RedPacketRuntime.selectMode(RedPacketPolicy.Mode.SILENT);
+        String skin="<msg><appmsg><type>2001</type><wcpayinfo><nativeurl><![CDATA["+url("skin-new-page")+"]]></nativeurl><hbcover><coverid>synthetic-skin</coverid></hbcover></wcpayinfo></appmsg></msg>";
+        String skinUrl=RedPacketEngine.messageUrl(436207665,0L,skin);check(url("skin-new-page").equals(skinUrl),"skin card retains exact native red packet URL");
+        int skinLaunch=Kernel.launched,skinClick=Kernel.clicked;
+        RedPacketRuntime.received(skinUrl,99,"room@chatroom",System.currentTimeMillis());Handler.advance(500);h6 skinOpen=queryThenOpen();skinOpen.h.n="skin-new-page";callback(skinOpen,0,0);
+        check(Kernel.launched==skinLaunch&&Kernel.clicked==skinClick,"premium skin receive stays silent without opening either receive UI");
         Kernel.edition=Kernel.authorized="vip";check(RedPacketRuntime.premiumEnabled() && RedPacketRuntime.silentSelected(),"VIP includes advanced silent mode");
         Kernel.edition="vip";Kernel.authorized="plus";
         check(!RedPacketRuntime.premiumEnabled() && !RedPacketRuntime.silentSelected(),"VIP kernel needs matching cumulative authorization");

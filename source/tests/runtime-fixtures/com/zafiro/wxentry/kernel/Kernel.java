@@ -6,7 +6,7 @@ final class Kernel {
     static String edition="plus",authorized="plus";
     static final String RP_WL_PATH=WXDIR+"redpacket.whitelist",RP_DELAY_PATH=WXDIR+"redpacket.delay";
     static String receiptAccount() { return w41.z1.u(); }
-    static boolean freeRedPacketManualOnly() { return "free".equals(edition); }
+    static boolean freeRedPacketForegroundOnly() { return "free".equals(edition); }
     static boolean tryClickKai(android.app.Activity act) { if(!act.visible || !act.button)return false;clicked++;return true; }
     static Object db0() { return new Object(); }
     static android.database.Cursor cursor;

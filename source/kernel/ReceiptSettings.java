@@ -38,7 +38,7 @@ final class ReceiptSettings {
             render[0]=new Runnable() { public void run() {
                 try {
                     ReceiptConfig config=ReceiptStore.load(feature,account);box.removeAllViews();
-                    box.addView(SettingsUi.text(act,"每类的黑白名单互斥。分类开启时，两项都关闭表示不限名单。点击名单文字编辑。",12));
+                    box.addView(SettingsUi.text(act,(config.enabled?"自动处理总开关已开启。":"自动处理总开关已关闭，开启后本页规则才生效。")+"分类关闭：不处理任何人。分类开启：空白名单处理全部，非空白名单只处理选中的；黑名单不处理选中的。黑白名单互斥，两项都关闭则处理全部。点击名单文字编辑。",12));
                     for(final ReceiptConfig.Scope scope:ReceiptConfig.Scope.values()) {
                         ReceiptConfig.ListRule state=config.scope(scope);SettingsUi.heading(box,scope.label);
                         box.addView(SettingsUi.toggle(act,"允许处理此类"+feature.label,"关闭后此分类不自动处理",state.rule!=ReceiptConfig.Rule.OFF,new SettingsUi.Change() {
@@ -46,7 +46,7 @@ final class ReceiptSettings {
                         }));
                         for(final boolean white:new boolean[]{true,false}) {
                             int size=(white?state.white:state.black).size();
-                            SettingsUi.ToggleRow row=SettingsUi.toggle(act,"使用"+(white?"白名单":"黑名单"),white&&size==0?"空白名单不处理 · 点击文字添加":"已选 "+size+" 项 · 点击文字编辑",state.rule==(white?ReceiptConfig.Rule.WHITE:ReceiptConfig.Rule.BLACK),new SettingsUi.Change() {
+                            SettingsUi.ToggleRow row=SettingsUi.toggle(act,white?"白名单（只处理选中的）":"黑名单（不处理选中的）",state.rule==ReceiptConfig.Rule.OFF?"分类已关闭，本名单暂不生效":white&&size==0?(state.rule==ReceiptConfig.Rule.WHITE?"当前处理全部（白名单为空）":"空白名单启用后处理全部")+" · 点击文字添加":"已选 "+size+" 项 · 点击文字编辑",state.rule==(white?ReceiptConfig.Rule.WHITE:ReceiptConfig.Rule.BLACK),new SettingsUi.Change() {
                                 public boolean set(boolean on) { return changeRule(act,feature,scope,account,white?1:2,on,render[0]); }
                             });
                             row.control.setEnabled(state.rule!=ReceiptConfig.Rule.OFF);
@@ -138,7 +138,7 @@ final class ReceiptSettings {
             final String account=ReceiptStore.account();ReceiptConfig config=ReceiptStore.load(feature,account);
             LinearLayout box=SettingsUi.column(act);
             final SettingsUi.ToggleRow enabled=SettingsUi.toggle(act,"启用随机延时","保存后生效",config.delayEnabled,new SettingsUi.Change() { public boolean set(boolean on) { return on; } });box.addView(enabled);
-            TextView hint=new TextView(act);hint.setText((feature==ReceiptConfig.Feature.RED_PACKET && Kernel.freeRedPacketManualOnly()?"手动打开红包后":"收到后")+"随机等待最短～最长秒数。关闭即立即处理；两值相同则固定等待。支持三位小数，范围 0～86400 秒。");box.addView(hint);
+            TextView hint=new TextView(act);hint.setText("收到后随机等待最短～最长秒数。关闭即立即处理；两值相同则固定等待。支持三位小数，范围 0～86400 秒。");box.addView(hint);
             final EditText min=new EditText(act),max=new EditText(act);
             min.setHint("最短延时（秒）");max.setHint("最长延时（秒）");
             min.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);

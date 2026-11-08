@@ -5,7 +5,7 @@ public class NativeTransferContractCheck extends NativeRedPacketContractCheck {
  static void string(Method m,String value){for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction){Reference r=((ReferenceInstruction)ins).getReference();if(r instanceof StringReference&&((StringReference)r).getString().equals(value)){checks++;return;}}throw new AssertionError("Missing native string "+value);}
  public static void main(String[] args)throws Exception{
   String model="com.tencent.mm.plugin.remittance.model.",ui="com.tencent.mm.plugin.remittance.ui.RemittanceDetailUI",redUi="com.tencent.mm.plugin.luckymoney.ui.LuckyMoneyNotHookReceiveUI";
-  Set<String> names=new HashSet<>(Arrays.asList(model+"h1",model+"n0",ui,redUi,"xx0.r"));
+  Set<String> names=new HashSet<>(Arrays.asList(model+"h1",model+"n0",ui,redUi,"com.tencent.mm.plugin.luckymoney.ui.LuckyMoneyNewReceiveUI","xx0.r"));
   try(ZipFile zip=new ZipFile(args[0])){Enumeration<? extends ZipEntry> es=zip.entries();while(es.hasMoreElements()){ZipEntry e=es.nextElement();if(!e.getName().matches("classes[0-9]*\\.dex"))continue;DexBackedDexFile dex=DexBackedDexFile.fromInputStream(Opcodes.getDefault(),new BufferedInputStream(zip.getInputStream(e)));for(ClassDef c:dex.getClasses())if(names.contains(c.getType().substring(1,c.getType().length()-1).replace('/','.')))classes.put(c.getType(),c);}}
   String s="Ljava/lang/String;",i="I",v="V",j="Lorg/json/JSONObject;";
   Method qc=method(model+"h1","<init>",v,i,s,s,i,s,s),cc=method(model+"n0","<init>",v,s,s,i,s,s,i,s,s,i,s,"Ljava/util/Map;","J",s,s);
@@ -17,6 +17,12 @@ public class NativeTransferContractCheck extends NativeRedPacketContractCheck {
   Method after=method(ui,"O7",v,type(model+"n0"));string(after,"confirm");boolean refresh=false;for(Instruction ins:after.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction){Reference r=((ReferenceInstruction)ins).getReference();if(r instanceof MethodReference&&((MethodReference)r).getName().equals("N7"))refresh=true;}if(!refresh)throw new AssertionError("Native confirmation no longer refreshes status");checks++;
   field(redUi,"o","Landroid/widget/Button;");Method create=method(redUi,"onCreate",v,"Landroid/os/Bundle;");string(create,"key_native_url");
   boolean session=false;for(Method m:classes.get(type(redUi)).getMethods())if(m.getImplementation()!=null)for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction){Reference r=((ReferenceInstruction)ins).getReference();if(r instanceof StringReference&&((StringReference)r).getString().equals("key_username"))session=true;}if(!session)throw new AssertionError("Red packet session key changed");checks++;
+  String newUi="com.tencent.mm.plugin.luckymoney.ui.LuckyMoneyNewReceiveUI";
+  field(newUi,"o","Landroid/widget/Button;");Method newCreate=method(newUi,"onCreate",v,"Landroid/os/Bundle;");
+  string(newCreate,"key_native_url");string(newCreate,"key_username");
+  Method skinOpen=method(newUi,"G7",v,s);boolean nativeSkinOpen=false;
+  for(Instruction ins:skinOpen.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction){Reference r=((ReferenceInstruction)ins).getReference();if(r instanceof MethodReference){MethodReference m=(MethodReference)r;if(m.getDefiningClass().equals(type("com.tencent.mm.plugin.luckymoney.model.h6"))&&m.getName().equals("<init>"))nativeSkinOpen=true;}}
+  if(!nativeSkinOpen)throw new AssertionError("Native skin receive no longer uses standard open scene");checks++;
   Set<String> xmlKeys=new HashSet<>();for(Method m:classes.get(type("xx0.r")).getMethods())if(m.getImplementation()!=null)for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction){Reference r=((ReferenceInstruction)ins).getReference();if(r instanceof StringReference)xmlKeys.add(((StringReference)r).getString());}
   for(String key:new String[]{"paysubtype","transcationid","transferid","total_fee","fee_type","payer_username","receiver_username"}){boolean found=false;for(String value:xmlKeys)if(value.endsWith(".wcpayinfo."+key))found=true;if(!found)throw new AssertionError("Native transfer XML field changed "+key);checks++;}
   System.out.println("PASS "+checks+" native transfer and manual red packet UI contracts");

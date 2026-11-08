@@ -24,13 +24,15 @@ final class TransferRuntime implements TransferEngine.Host,TransferNative.Listen
         if(runtime==null || !Kernel.redPacketPremiumEnabled() || content==null || !content.contains("wcpayinfo"))return;
         runtime.handler.post(new Runnable() { public void run() {
             try {
-                if(!ReceiptStore.enabled(ReceiptConfig.Feature.TRANSFER))return;
+                if(!ReceiptStore.enabled(ReceiptConfig.Feature.TRANSFER)){Kernel.T("transfer: skipped switch-off");return;}
                 if(created!=null && created.longValue()>0) {
                     long time=created.longValue();if(time<100000000000L)time*=1000;
                     long age=System.currentTimeMillis()-time;if(age>300000 || age < -60000)return;
                 }
                 TransferEngine.Packet p=TransferEngine.parse(runtime.api.account(),talker,content,false);
-                if(p!=null)runtime.engine.accept(p);
+                if(p==null){Kernel.T("transfer: skipped unsupported-card-or-identity");return;}
+                Kernel.T("transfer: parsed scope="+ReceiptConfig.Scope.of(p.talker)+" amountSource="+(p.cents<0?"native-query":"card+native-query"));
+                if(runtime.engine.accept(p)==null)Kernel.T("transfer: skipped policy-duplicate-or-capacity");
             } catch(Throwable failure) { runtime.error(failure); }
         } });
     }
@@ -42,15 +44,15 @@ final class TransferRuntime implements TransferEngine.Host,TransferNative.Listen
     public boolean reserve(String key) { return RedPacketRuntime.reserveKey(key); }
     public long delay(TransferEngine.Packet p) { return ReceiptStore.delay(ReceiptConfig.Feature.TRANSFER,p.account); }
     public void later(long ms,Runnable r) { handler.postDelayed(r,ms); }
-    public void query(TransferEngine.Attempt a,boolean verify) throws Throwable { api.query(a,verify); }
-    public void confirm(TransferEngine.Attempt a,TransferEngine.Query q) throws Throwable { api.confirm(a,q); }
-    public void queried(final TransferEngine.Attempt a,final TransferEngine.Query q) { handler.post(new Runnable() { public void run() { engine.queried(a,q); } }); }
+    public void query(TransferEngine.Attempt a,boolean verify) throws Throwable { Kernel.T("transfer: query verify="+verify);api.query(a,verify); }
+    public void confirm(TransferEngine.Attempt a,TransferEngine.Query q) throws Throwable { Kernel.T("transfer: confirm nativeAmount=true");api.confirm(a,q); }
+    public void queried(final TransferEngine.Attempt a,final TransferEngine.Query q) { handler.post(new Runnable() { public void run() { Kernel.T("transfer: query-result error="+(q==null?-1:q.error)+" status="+(q==null?-1:q.status)+" identity="+TransferEngine.identity(a.packet,q)+" needsAction="+(q!=null&&q.needsAction)+" balance="+(q!=null&&q.balanceAvailable));engine.queried(a,q); } }); }
     public void confirmed(final TransferEngine.Attempt a,final int error,final boolean action) { handler.post(new Runnable() { public void run() { engine.confirmed(a,error,action); } }); }
     public void finished(TransferEngine.Attempt a,String status,boolean success) {
-        api.forget(a);
+        api.forget(a);Kernel.T("transfer: finished success="+success+" status="+status);
         if(success) {
             String name=Kernel.displayNameOf(a.packet.sender);if(RedPacketEngine.empty(name))name=a.packet.sender;
-            String message="已接收「"+RedPacketRuntime.clean(name)+"」的转账，"+RedPacketEngine.amount(a.packet.cents)+" 元";
+            String message="已接收「"+RedPacketRuntime.clean(name)+"」的转账，"+RedPacketEngine.amount(a.acceptedQuery.cents)+" 元";
             RedPacketRuntime.record(a.packet.account,"转账："+message);
             if(!RedPacketRuntime.flag(Kernel.RP_TOAST_OFF_PATH))Kernel.toastMain(message);
         } else RedPacketRuntime.record(a.packet.account,"转账："+status);

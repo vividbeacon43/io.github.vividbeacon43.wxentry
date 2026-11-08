@@ -31,7 +31,7 @@ final class ReceiptConfig {
             if(enabled)rule=selected;else if(rule==selected)rule=Rule.ALL;
         }
         boolean permits(String id) {
-            return rule==Rule.ALL || rule==Rule.WHITE && white.contains(id) || rule==Rule.BLACK && !black.contains(id);
+            return rule==Rule.ALL || rule==Rule.WHITE && (white.isEmpty() || white.contains(id)) || rule==Rule.BLACK && !black.contains(id);
         }
     }
     boolean enabled;

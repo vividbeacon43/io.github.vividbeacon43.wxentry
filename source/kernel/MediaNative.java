@@ -71,6 +71,14 @@ final class MediaNative {
     }
     static Object imageInfo(Message m)throws Throwable{return XposedHelpers.callMethod(call("g61.a1","Hj"),"K3",m.talker,m.server);}
     static Object originalInfo(Object base)throws Throwable{return call("g61.b0","d",base);}
+    static void refreshOriginal(Object holder,Message m)throws Throwable{
+        if(holder==null||m==null)return;Object adapter=XposedHelpers.getObjectField(holder,"d");if(adapter==null)return;Object ui=XposedHelpers.getObjectField(adapter,"g");
+        if(ui==null||Boolean.TRUE.equals(XposedHelpers.callMethod(ui,"isFinishing"))||Boolean.TRUE.equals(XposedHelpers.callMethod(ui,"isDestroyed"))||XposedHelpers.getLongField(ui,"D")!=m.local||!m.talker.equals(XposedHelpers.getObjectField(ui,"E")))return;
+        Object selected=XposedHelpers.callMethod(adapter,"v");if(selected==null||((Number)XposedHelpers.callMethod(selected,"getMsgId")).longValue()!=m.local||((Number)XposedHelpers.callMethod(selected,"G0")).longValue()!=m.server)return;
+        XposedHelpers.callMethod(holder,"x",selected,true);
+        XposedHelpers.callMethod(ui,"Ba",XposedHelpers.callMethod(ui,"A9"));
+        Kernel.T("ARORIGINAL viewer-refreshed");
+    }
     static boolean originalAvailable(Object base)throws Throwable{return base!=null&&Boolean.TRUE.equals(XposedHelpers.callMethod(base,"k"));}
     static boolean originalReady(Message m,Object base)throws Throwable{
         if(!originalAvailable(base))return false;Object original=originalInfo(base);if(original==null||!Boolean.TRUE.equals(XposedHelpers.callMethod(original,"l")))return false;

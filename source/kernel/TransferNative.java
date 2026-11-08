@@ -90,7 +90,7 @@ final class TransferNative {
     }
     void confirm(TransferEngine.Attempt a,TransferEngine.Query q) throws Throwable {
         TransferEngine.Packet p=a.packet;
-        submit(confirmCtor.newInstance(p.transaction,p.transfer,p.cents,"confirm",p.talker,p.invalid,"",p.group(),1,q.bindSerial,null,0L,q.sender,p.attach),new Owned(a,true));
+        submit(confirmCtor.newInstance(p.transaction,p.transfer,Math.toIntExact(q.cents),"confirm",p.talker,p.invalid,"",p.group(),1,q.bindSerial,null,0L,q.sender,p.attach),new Owned(a,true));
     }
     void forget(TransferEngine.Attempt a) {
         synchronized(requests) { Iterator<Owned> it=requests.values().iterator();while(it.hasNext())if(it.next().attempt==a)it.remove(); }

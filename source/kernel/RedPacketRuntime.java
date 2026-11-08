@@ -65,7 +65,6 @@ final class RedPacketRuntime implements RedPacketEngine.Host,RedPacketNative.Lis
     }
 
     static void received(final String url,final long msgId,final String talker,final Long created) {
-        if(Kernel.freeRedPacketManualOnly())return;
         final RedPacketRuntime runtime=instance;
         if(runtime==null) {
             // Preserve the existing simulation when the native adapter is unsupported.
@@ -103,14 +102,16 @@ final class RedPacketRuntime implements RedPacketEngine.Host,RedPacketNative.Lis
     }
     static void legacyUi(final Activity act) {
         final String url=act.getIntent().getStringExtra("key_native_url");
-        if(url==null)return;
-        final boolean manual=Kernel.freeRedPacketManualOnly();
-        if(!manual)synchronized(Kernel.RP_SEEN) { if(!Kernel.RP_SEEN.contains(url))return; }
+        if(url==null){Kernel.T("rp ui skip missing native URL page="+act.getClass().getSimpleName());return;}
+        final boolean manual=Kernel.freeRedPacketForegroundOnly();
+        final boolean owned;synchronized(Kernel.RP_SEEN) { owned=Kernel.RP_SEEN.contains(url); }
+        if(!manual&&!owned)return;
         final String account=Kernel.receiptAccount(),talker=act.getIntent().getStringExtra("key_username");
         if(manual && (!ReceiptConfig.validId(account) || !ReceiptStore.permits(ReceiptConfig.Feature.RED_PACKET,account,talker)))return;
+        Kernel.T("rp ui scheduled manual="+manual+" page="+act.getClass().getSimpleName());
         final java.lang.ref.WeakReference<Activity> activity=new java.lang.ref.WeakReference<Activity>(act);
         final Handler main=new Handler(Looper.getMainLooper());
-        final long delay=manual?ReceiptStore.delay(ReceiptConfig.Feature.RED_PACKET,account):0;
+        final long delay=manual&&!owned?ReceiptStore.delay(ReceiptConfig.Feature.RED_PACKET,account):0;
         final long deadline=SystemClock.elapsedRealtime()+delay+12000;
         main.postDelayed(new Runnable() { public void run() {
             Activity current=activity.get();
@@ -123,7 +124,7 @@ final class RedPacketRuntime implements RedPacketEngine.Host,RedPacketNative.Lis
     public long now() { return SystemClock.elapsedRealtime(); }
     public boolean allowed(RedPacketEngine.Packet p) {
         try {
-            return !Kernel.MODULE_OFF && !Kernel.freeRedPacketManualOnly() && p.account.equals(api.account())
+            return !Kernel.MODULE_OFF && p.account.equals(api.account())
                 && ReceiptStore.permits(ReceiptConfig.Feature.RED_PACKET,p.account,p.talker);
         } catch(Throwable failure) { return false; }
     }

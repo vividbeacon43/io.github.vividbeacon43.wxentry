@@ -12,10 +12,13 @@ final class OriginalImageRuntime {
     static final ScheduledThreadPoolExecutor io=new ScheduledThreadPoolExecutor(1);
     static final ConcurrentHashMap<String,Job> jobs=new ConcurrentHashMap<String,Job>();
     static final java.util.concurrent.atomic.AtomicInteger pending=new java.util.concurrent.atomic.AtomicInteger();
+    static final java.util.Set<String> viewedPending=java.util.Collections.newSetFromMap(new ConcurrentHashMap<String,Boolean>());
+    static volatile java.lang.ref.WeakReference<Object> currentViewer=new java.lang.ref.WeakReference<Object>(null);
     static final class Job {
         final String key,account,owner,talker;final long local,server,received;
         volatile boolean running,queued,done;volatile Object manager,listener,idTalker;volatile long imageId,next;volatile int generation,attempts;
-        Job(MediaNative.Message m){account=m.account;owner=ReceiptStore.account();talker=m.talker;local=m.local;server=m.server;received=m.received;key=account+"|"+local+"|"+server;}
+        Job(MediaNative.Message m){this(m,m.received);}
+        Job(MediaNative.Message m,long windowStart){account=m.account;owner=ReceiptStore.account();talker=m.talker;local=m.local;server=m.server;received=windowStart;key=account+"|"+local+"|"+server;}
     }
     static boolean enabled(){return !Kernel.MODULE_OFF&&ReceiptStore.enabled(ReceiptConfig.Feature.ORIGINAL_IMAGE);}
     static boolean allowed(String owner,String talker){return !Kernel.MODULE_OFF&&owner.equals(Kernel.receiptAccount())&&ReceiptStore.permits(ReceiptConfig.Feature.ORIGINAL_IMAGE,owner,talker);}
@@ -26,12 +29,22 @@ final class OriginalImageRuntime {
         Class<?> nativeImage=Class.forName("g61.j",false,loader),talker=Class.forName("com.tencent.mm.plugin.msg.MsgIdTalker",false,loader),listener=Class.forName("ma0.w",false,loader);
         nativeImage.getDeclaredMethod("b",long.class,talker,int.class,Object.class,int.class,listener,int.class,boolean.class);
         nativeImage.getDeclaredMethod("g",long.class,talker,int.class,listener);
+        Class<?> viewer=Class.forName("com.tencent.mm.ui.chatting.gallery.d3",false,loader),message=Class.forName("com.tencent.mm.storage.f9",false,loader);
+        XposedBridge.hookMethod(viewer.getDeclaredMethod("x",message,boolean.class),new XC_MethodHook(){protected void afterHookedMethod(MethodHookParam p){
+            if(p.hasThrowable()||p.args[0]==null||!enabled())return;
+            try{Object msg=p.args[0];if(((Number)XposedHelpers.callMethod(msg,"A0")).intValue()!=0)return;currentViewer=new java.lang.ref.WeakReference<Object>(p.thisObject);viewed((String)XposedHelpers.callMethod(msg,"O0"),((Number)XposedHelpers.callMethod(msg,"getMsgId")).longValue(),((Number)XposedHelpers.callMethod(msg,"G0")).longValue());}catch(Throwable e){error("viewer-error",e);}
+        }});
         int hooks=0;for(Class<?> db:Kernel.discoverDbImpls(loader))for(Method m:db.getDeclaredMethods()){
             Class<?>[] p=m.getParameterTypes();if(m.getReturnType()!=long.class||p.length!=3||p[0]!=String.class||p[1]!=String.class||p[2]!=ContentValues.class)continue;
             XposedBridge.hookMethod(m,new XC_MethodHook(){protected void afterHookedMethod(MethodHookParam p){if(!p.hasThrowable()&&p.getResult() instanceof Number&&((Number)p.getResult()).longValue()>=0&&"message".equals(p.args[0]))inserted(p.thisObject,(ContentValues)p.args[2]);}});hooks++;
         }
         io.setRemoveOnCancelPolicy(true);io.scheduleWithFixedDelay(new Runnable(){public void run(){try{tick();}catch(Throwable e){error("tick-error",e);}}},1,1,TimeUnit.SECONDS);
-        Kernel.T("ARORIGINAL ready insertHooks="+hooks+" editions=all independent=true nativeType=1");
+        Kernel.T("ARORIGINAL ready insertHooks="+hooks+" viewer=true editions=all independent=true nativeType=1");
+    }
+    static void viewed(final String talker,final long local,final long server){
+        final String owner=Kernel.receiptAccount(),key=owner+"|"+local+"|"+server;
+        if(!enabled()||local<=0||server<=0||jobs.size()>=128||!allowed(owner,talker)||viewedPending.size()>=128||!viewedPending.add(key))return;
+        io.execute(new Runnable(){public void run(){try{if(!allowed(owner,talker))return;MediaNative.Message m=MediaNative.read(null,talker,server);if(m==null||m.local!=local||(m.type&0xffff)!=3||MediaNative.originalReady(m,MediaNative.imageInfo(m)))return;Job j=new Job(m,System.currentTimeMillis());if(jobs.putIfAbsent(j.key,j)==null)Kernel.T("ARORIGINAL viewer-queued mid="+local);}catch(Throwable e){error("viewer-queue-error",e);}finally{viewedPending.remove(key);}}});
     }
     static void inserted(final Object db,ContentValues cv){
         if(!enabled()||cv==null)return;Integer type=cv.getAsInteger("type"),sent=cv.getAsInteger("isSend");final Long sid=cv.getAsLong("msgSvrId");final String talker=cv.getAsString("talker");
@@ -58,13 +71,14 @@ final class OriginalImageRuntime {
         j.queued=false;if(!alive(j)||j.running)return;int running=0;for(Job other:jobs.values())if(other.running)running++;if(running>=4)return;
         try{
             MediaNative.Message m=current(j);if(m==null)return;Object base=MediaNative.imageInfo(m);if(!MediaNative.originalAvailable(base))return;
-            if(MediaNative.originalReady(m,base)){j.done=true;return;}Object original=MediaNative.originalInfo(base);if(original==null)return;
-            j.imageId=XposedHelpers.getLongField(original,"a");if(j.imageId<=0)return;
+            if(MediaNative.originalReady(m,base)){j.done=true;return;}
+            // The viewer queues the main image row with compressType=1; the service resolves its HD row.
+            j.imageId=XposedHelpers.getLongField(base,"a");if(j.imageId<=0)return;
             j.idTalker=XposedHelpers.newInstance(MediaNative.cls("com.tencent.mm.plugin.msg.MsgIdTalker"),j.local,j.talker);
             j.manager=XposedHelpers.callMethod(MediaNative.service("ma0.y"),"Hj");final int generation=++j.generation;
             j.listener=Proxy.newProxyInstance(MediaNative.cl,new Class<?>[]{MediaNative.cls("ma0.w")},new InvocationHandler(){public Object invoke(Object proxy,Method method,Object[] args){
                 String n=method.getName();if(n.equals("hashCode"))return System.identityHashCode(proxy);if(n.equals("equals"))return args!=null&&args[0]==proxy;if(n.equals("toString"))return "WXEntryOriginalListener";
-                if(n.equals("d")&&args!=null&&args.length==10){final boolean success=((Number)args[6]).intValue()==0&&((Number)args[7]).intValue()==0;main.post(new Runnable(){public void run(){if(j.generation==generation)completed(j,success);}});}return null;
+                if(n.equals("d")&&args!=null&&args.length==10){final int errorType=((Number)args[6]).intValue(),errorCode=((Number)args[7]).intValue();final boolean success=errorType==0&&errorCode==0;Kernel.T("ARORIGINAL callback nativeType=1 error="+errorType+"/"+errorCode);main.post(new Runnable(){public void run(){if(j.generation==generation)completed(j,success);}});}return null;
             }});
             j.running=true;j.attempts++;int result=((Number)XposedHelpers.callMethod(j.manager,"b",j.imageId,j.idTalker,1,j.key,0,j.listener,-1,false)).intValue();
             Kernel.T("ARORIGINAL request mid="+j.local+" nativeType=1 result="+result);
@@ -73,7 +87,7 @@ final class OriginalImageRuntime {
     }
     static void completed(final Job j,final boolean success){
         if(!j.running)return;j.running=false;j.manager=null;j.listener=null;j.idTalker=null;j.next=System.currentTimeMillis()+5000;
-        io.execute(new Runnable(){public void run(){try{if(!alive(j))return;MediaNative.Message m=current(j);if(success&&m!=null&&MediaNative.originalReady(m,MediaNative.imageInfo(m))){j.done=true;Kernel.T("ARORIGINAL complete mid="+j.local);}}catch(Throwable e){error("completion-error",e);}}});
+        io.execute(new Runnable(){public void run(){try{if(!alive(j))return;final MediaNative.Message m=current(j);if(success&&m!=null&&MediaNative.originalReady(m,MediaNative.imageInfo(m))){j.done=true;Kernel.T("ARORIGINAL complete mid="+j.local);main.post(new Runnable(){public void run(){if(!allowed(j.owner,j.talker))return;try{MediaNative.refreshOriginal(currentViewer.get(),m);}catch(Throwable e){error("viewer-refresh-error",e);}}});}}catch(Throwable e){error("completion-error",e);}}});
     }
     static void detach(Job j){
         j.generation++;j.queued=false;if(j.running){j.running=false;try{if(j.manager!=null&&j.listener!=null)XposedHelpers.callMethod(j.manager,"g",j.imageId,j.idTalker,1,j.listener);}catch(Throwable e){error("detach-error",e);}}

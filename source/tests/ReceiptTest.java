@@ -13,7 +13,8 @@ public class ReceiptTest {
   c.minDelayMs=c.maxDelayMs=99999;check(c.delay(new Random())==99999,"equal endpoints fixed above 45 second timeout");
   c.person.rule=ReceiptConfig.Rule.WHITE;c.person.white.add("peer");c.group.rule=ReceiptConfig.Rule.BLACK;c.group.black.add("blocked@chatroom");
   check(c.permits("peer")&&!c.permits("other")&&c.permits("ok@chatroom")&&!c.permits("blocked@chatroom"),"personal and group rules independent");
-  c.person.white.clear();check(!c.permits("peer"),"empty active white list denies all");
+  c.person.white.clear();check(c.permits("peer")&&c.permits("other"),"enabled empty white list handles everyone");
+  c.person.rule=ReceiptConfig.Rule.OFF;check(!c.permits("peer"),"disabled category still blocks everyone with an empty white list");c.person.rule=ReceiptConfig.Rule.WHITE;
   c.person.rule=ReceiptConfig.Rule.OFF;check(!c.permits("peer"),"scope off denies all");
   ReceiptConfig.ListRule exclusive=new ReceiptConfig.ListRule();exclusive.white.add("peer");exclusive.black.add("peer");
   exclusive.setList(true,true);check(exclusive.rule==ReceiptConfig.Rule.WHITE&&exclusive.permits("peer")&&!exclusive.permits("other"),"enable white only uses white even if black retains same person");
