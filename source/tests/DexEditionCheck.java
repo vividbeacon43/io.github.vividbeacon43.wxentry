@@ -41,9 +41,21 @@ public final class DexEditionCheck {
         Map<String,String> values=new HashMap<>();
         for(Field f:kernel.getStaticFields())if(f.getInitialValue() instanceof StringEncodedValue)
             values.put(f.getName(),((StringEncodedValue)f.getInitialValue()).getValue());
-        if(!args[1].equals(values.get("EDITION"))||!"246".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
-        for(String name:new String[]{"RedPacketPolicy","RedPacketEngine","RedPacketNative","RedPacketRuntime","RedPacketSettings"})
+        if(!args[1].equals(values.get("EDITION"))||!"250".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
+        for(String name:new String[]{"RedPacketUi","RedPacketUiNative","RedPacketPolicy","RedPacketEngine","RedPacketNative","RedPacketRuntime","RedPacketSettings"})
             if(!red.contains(root+name+";"))throw new AssertionError("Red packet runtime missing: "+name);
+        boolean contextAtBoot=false, nativeUiDelegate=false, fullNativeEntry=false;
+        for(Method m:kernel.getMethods())if(m.getImplementation()!=null)
+            for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction) {
+                Reference ref=((ReferenceInstruction)ins).getReference();
+                if(ref instanceof MethodReference) {
+                    MethodReference call=(MethodReference)ref;
+                    if(m.getName().equals("boot0") && call.getDefiningClass().equals(root+"Kernel;") && call.getName().equals("rememberAppContext"))contextAtBoot=true;
+                    if(m.getName().equals("openReceiveUI") && call.getDefiningClass().equals(root+"RedPacketUiNative;") && call.getName().equals("prepare"))fullNativeEntry=true;
+                    if(m.getName().equals("openReceiveUI") && call.getDefiningClass().equals(root+"RedPacketUi;") && call.getName().equals("open"))nativeUiDelegate=true;
+                }
+            }
+        if(!contextAtBoot || !nativeUiDelegate || !fullNativeEntry)throw new AssertionError("Native UI context recovery is not wired into the released kernel");
         boolean nativeTip=false;
         for(Method m:kernel.getMethods()) {
             if(m.getName().equals("insertKeptCopy")||m.getName().equals("cloneRecently")||m.getName().equals("notifyInsert"))throw new AssertionError("Unsafe raw message cloning path retained");
@@ -141,6 +153,6 @@ public final class DexEditionCheck {
                 }
             }
         if(!singleChoice || multiChoice || !frontLabel || !silentLabel)throw new AssertionError("Receive mode is not an explicit mutually exclusive picker");
-        System.out.println("PASS edition="+args[1]+" BUILD=246 voice=true forward=true receipt=true redpacket_premium="+premium+" receive_mode="+(args[1].equals("free")?"foreground-auto-open":"single-choice")+" image="+premium+" tablet_premium="+premium+" media_prefetch=true original_download=true");
+        System.out.println("PASS edition="+args[1]+" BUILD=250 voice=true forward=true receipt=true redpacket_premium="+premium+" receive_mode="+(args[1].equals("free")?"foreground-auto-open":"single-choice")+" image="+premium+" tablet_premium="+premium+" media_prefetch=true original_download=true");
     }
 }

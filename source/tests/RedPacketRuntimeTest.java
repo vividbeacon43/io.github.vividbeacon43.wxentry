@@ -114,7 +114,9 @@ public final class RedPacketRuntimeTest {
             check(beforeHistory.equals(RedPacketRuntime.history()),"lower edition cannot write premium receipt history: "+edition);
         }
         Kernel.edition=Kernel.authorized="free";launched=Kernel.launched;submitted=zp0.j1.holder.b.submitted;int clicks=Kernel.clicked;
-        receive("free-arrival");Handler.advance(1000);
+        String completeCard="<msg><appmsg><type>2001</type><skin>native-complete-source</skin></appmsg></msg>";
+        RedPacketRuntime.received(url("free-arrival"),10,"room@chatroom",System.currentTimeMillis(),completeCard);Handler.advance(1500);
+        check(completeCard.equals(Kernel.lastReceivedContent),"free delayed arrival preserves complete native card source through launch");
         check(Kernel.launched==launched+1 && Kernel.clicked==clicks && zp0.j1.holder.b.submitted==submitted,"free arrival launches visible UI without silent submission");
         check(!RedPacketRuntime.silentSelected()&&!RedPacketRuntime.selectMode(RedPacketPolicy.Mode.SILENT),"free cannot use stale or selected silent mode");
         launched=Kernel.launched;
@@ -173,6 +175,11 @@ public final class RedPacketRuntimeTest {
         check(!new RedPacketRuntime().reserve("persist-test") && state.exists(),"backup recovered before duplicate check");
         android.util.AtomicFile.fail=true;check(!r.reserve("write-failed"),"failed state commit prevents reservation");android.util.AtomicFile.fail=false;
         RedPacketRuntime.write(state.getPath(),"corrupted-state\n");check(!r.reserve("invalid"),"corrupt reservation state blocks automatic action");
+        Kernel.edition=Kernel.authorized="free";
+        android.app.Activity waiting=new android.app.Activity();waiting.intent.url=url("ui-waits-for-visible-button");waiting.button=false;
+        int oldClicks=Kernel.clicked;RedPacketRuntime.legacyUi(waiting);Handler.advance(13000);
+        check(Kernel.clicked==oldClicks,"unavailable visible button is never forced or counted as receipt");
+        check(String.join("\n",Kernel.logs).contains("rp ui timeout page=Activity state=shown=true,enabled=false"),"click timeout records page and visible-button state for diagnosis");
         System.out.println("PASS "+checks+" red packet settings/persistence/reply-flow checks");
     }
 }

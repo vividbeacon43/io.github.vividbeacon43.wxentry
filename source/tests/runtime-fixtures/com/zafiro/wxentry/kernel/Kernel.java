@@ -2,7 +2,7 @@ package com.zafiro.wxentry.kernel;
 final class Kernel {
     static final String WXDIR=System.getProperty("wxentry.test.dir")+"/";
     static final String RP_ON_PATH=WXDIR+"redpacket.on",RP_TOAST_OFF_PATH=WXDIR+"redpacket.toast.off",RP_MODE_PATH=WXDIR+"redpacket.mode";
-    static boolean MODULE_OFF,whitelisted=true;static int launched,clicked;static String lastToast;
+    static boolean MODULE_OFF,whitelisted=true;static int launched,clicked;static String lastReceivedContent;static String lastToast;
     static String edition="plus",authorized="plus";
     static final String RP_WL_PATH=WXDIR+"redpacket.whitelist",RP_DELAY_PATH=WXDIR+"redpacket.delay";
     static String receiptAccount() { return w41.z1.u(); }
@@ -21,7 +21,8 @@ final class Kernel {
     }
     static boolean inWhitelist(String talker) { return whitelisted; }
     static long rpDelayRandom() { return 500; }
-    static void openReceiveUI(String url,long id,String talker) { launched++;RP_SEEN.add(url); }
+    static void openReceiveUI(String url,long id,String talker,String content) { launched++;lastReceivedContent=content;RP_SEEN.add(url); }
+    static String redPacketUiState(android.app.Activity act) { return "shown="+act.visible+",enabled="+act.button; }
     static void clickKai(android.app.Activity act) { clicked++; }
     static String displayNameOf(String sender) { return "备注名称"; }
     static void toastMain(String message) { lastToast=message; }

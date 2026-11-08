@@ -27,7 +27,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "246";
+    static final String BUILD = "250";
     public static final String EDITION = "plus";
     static final boolean RP_PREMIUM_EDITION = true;
     static final boolean TABLET_PREMIUM_EDITION = true;
@@ -421,6 +421,7 @@ static boolean wxVersionOk(Object actObj) {
     static void boot0(ClassLoader cl, final Object actObj) {
 
         APP_CL = cl;
+        rememberAppContext(actObj, "boot");
         final long BOOT_T0 = System.currentTimeMillis();
         T("kernel boot v" + BUILD);
         try { T("lsp=" + lspVer()); } catch (Throwable t) {}
@@ -533,7 +534,7 @@ static boolean wxVersionOk(Object actObj) {
             XposedHelpers.findAndHookMethod(launcher, "onCreate", Bundle.class, new XC_MethodHook() {
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     Activity act = (Activity) param.thisObject;
-                    try { if (APP_CTX == null) APP_CTX = act.getApplicationContext(); } catch (Throwable t) {}
+                    try { rememberAppContext(act, "launcher"); } catch (Throwable t) {}
                     try { dbgSqlMaybe(); } catch (Throwable t) { T("dbg hook err " + t); }
                     try { snsDelTestMaybe(); } catch (Throwable t) { T("deltest hook err " + t); }
                     try { attachPlusLongClick(act); } catch (Throwable t) { T("plus attach err " + t); }
@@ -904,7 +905,7 @@ static boolean wxVersionOk(Object actObj) {
                                     String talker = cv.getAsString("talker");
                                     boolean isGroup = talker != null && talker.endsWith("@chatroom");
                                     T("rp: detect type=" + t + " group=" + isGroup);
-                                    RedPacketRuntime.received(url, mid == null ? 0L : mid.longValue(), talker, cv.getAsLong("createTime"));
+                                    RedPacketRuntime.received(url, mid == null ? 0L : mid.longValue(), talker, cv.getAsLong("createTime"), cv.getAsString("content"));
                                 } catch (Throwable t) { T("rp err " + t); }
                             }
                         });
@@ -1994,23 +1995,44 @@ static boolean wxVersionOk(Object actObj) {
         } catch (Throwable t) { return null; }
     }
 
-    static void openReceiveUI(final String url, final long msgId, final String talker) {
+    static android.content.Context rememberAppContext(Object seed, String source) {
+        boolean missing = APP_CTX == null;
+        android.content.Context app = RedPacketUi.application(APP_CTX, seed);
+        if (app != null) APP_CTX = app;
+        if (missing && app != null) T("rp ui context ready source=" + source);
+        return app;
+    }
+
+    static void openReceiveUI(final String url, final long msgId, final String talker, final String content) {
         try {
-            if (APP_CTX == null) { T("rp: no app ctx"); return; }
+            if (MODULE_OFF || RedPacketRuntime.silentSelected()
+                    || !ReceiptStore.permits(ReceiptConfig.Feature.RED_PACKET, receiptAccount(), talker)) return;
+            final Activity current = currentActivityNow();
+            final android.content.Context app = rememberAppContext(current, "receive");
             synchronized (RP_SEEN) {
                 if (RP_SEEN.contains(url)) { T("rp: dup url"); return; }
                 RP_SEEN.add(url);
+                boolean requested = false;
+                try {
+                    String source = RedPacketUi.open(app, current, RedPacketUiNative.prepare(APP_CL, url, msgId, talker, content));
+                    requested = !"no-context".equals(source);
+                    T("rp: receive ui launch requested=" + requested + " source=" + source
+                            + " nativeEntry=true scope=" + ReceiptConfig.Scope.of(talker));
+                } finally {
+                    if (!requested) RP_SEEN.remove(url);
+                }
             }
-            T("rp: opening receive ui msgId=" + msgId);
-            android.content.Intent i = new android.content.Intent();
-            i.setClassName("com.tencent.mm",
-                    "com.tencent.mm.plugin.luckymoney.ui.LuckyMoneyNotHookReceiveUI");
-            i.putExtra("key_native_url", url);
-            i.putExtra("key_msgid", msgId);
-            if (talker != null) i.putExtra("key_username", talker);
-            i.addFlags(0x10000000);
-            APP_CTX.startActivity(i);
-        } catch (Throwable t) { T("rp open err " + t); }
+        } catch (Throwable failure) { T("rp: receive ui launch failed " + failure.getClass().getSimpleName()); }
+    }
+
+    static String redPacketUiState(Activity act) {
+        try {
+            Object target = XposedHelpers.getObjectField(act, "o");
+            if (!(target instanceof android.view.View)) return "button-missing";
+            android.view.View button = (android.view.View) target;
+            return "shown=" + button.isShown() + ",enabled=" + button.isEnabled()
+                    + ",focus=" + act.hasWindowFocus() + ",closing=" + act.isFinishing();
+        } catch (Throwable failure) { return "unavailable:" + failure.getClass().getSimpleName(); }
     }
 
     static void clickKai(final Activity act) { tryClickKai(act); }
@@ -2358,6 +2380,7 @@ static boolean wxVersionOk(Object actObj) {
             XposedHelpers.findAndHookMethod(android.app.Activity.class, "onResume", new XC_MethodHook() {
                 protected void afterHookedMethod(MethodHookParam p) throws Throwable {
                     final Activity act = (Activity) p.thisObject;
+                    rememberAppContext(act, "resume");
                     CUR_ACT = new java.lang.ref.WeakReference<Activity>(act);
                     try { tinkerSeenChanged(act); } catch (Throwable t) {}
                     // v93：微信在后台待久了回到前台，首页那颗「+」的 View 会被重建，

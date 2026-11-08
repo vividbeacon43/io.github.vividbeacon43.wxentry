@@ -1,4 +1,4 @@
-# v246 验证
+# v250 验证
 
 - PASS 29 voice callback behavior checks
 - PASS 45 voice forwarding behavior checks
@@ -19,9 +19,11 @@
 - PASS 59 SNS draft eligibility, native editor extras, cancellation, account and owned-file behavior checks
 - True
 - PASS 89 premium entitlement and exclusive mode checks
-- PASS 108 red packet state/ownership/template checks
+- PASS 110 red packet state/ownership/template checks
 - PASS 49 native red packet callback/submission checks
-- PASS 102 red packet settings/persistence/reply-flow checks
+- PASS 20 red packet late-boot context and native launch delegation checks
+- PASS 22 native red packet source, envelope and entry delegation checks
+- PASS 105 red packet settings/persistence/reply-flow checks
 - PASS 44 receipt list/seconds/migration checks
 - PASS 51 transfer parser/native/receipt-flow checks
 - PASS 41 native voice menu/file/task/result contracts
@@ -32,11 +34,12 @@
 - PASS 57 native video/file revoke, download, path and original image contracts
 - PASS 91 native SNS long-press, source, downloads and composer contracts
 - PASS 6 native Moments merged-page and advertising marker contracts
+- PASS 37 native complete red packet entry, page selector and application route contracts
 - PASS 168 framework DEX ordering/search/body/immutability checks
 - PASS 81 final DEX enum reflection contracts
 - PASS 6 signed loader upgrade/rollback checks
-- PASS 8 APK manifest protocol and delivery checks (release and rollback)
+- PASS 8 APK manifest protocol and delivery checks
 
-本次以自动化行为测试及原微信 APK 接口检查验证朋友圈长按、原生完整素材下载、仅打开发表页、双红包页面支持及既有媒体规则。具体手机验证项目见 validation.json，不把静态检查计作完整手机验收。
+本版测试实际原生入口适配类、完整消息与皮肤模型传递、会话和消息参数、晚加载上下文恢复、延时交接及无可点击按钮时的超时诊断。原微信APK检查确认钱包入口、与聊天点击相同的新旧页面选择条件及Application路由的NEW_TASK处理。
 
-手机验证摘要见 validation.json。现场截图、二维码标识和密钥不分发。本次在授权测试机验证朋友圈菜单、转发开关与广告过滤；具体项目见手机验证记录。未发表测试朋友圈，测试草稿已丢弃，未覆盖所有系统组合。
+手机测试范围见validation.json；未把原生接口静态检查或桩测试表述为实际免费红包到账验收。测试机此前锁屏，本次只记录真实可完成的安装、最终字节和启动兼容检查。没有为本次验收收取红包、转账或向联系人发送消息。用户13:43上传报告仅用于定位，不随源码分发。

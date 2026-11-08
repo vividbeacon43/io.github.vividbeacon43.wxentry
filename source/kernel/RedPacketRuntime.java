@@ -65,10 +65,13 @@ final class RedPacketRuntime implements RedPacketEngine.Host,RedPacketNative.Lis
     }
 
     static void received(final String url,final long msgId,final String talker,final Long created) {
+        received(url,msgId,talker,created,null);
+    }
+    static void received(final String url,final long msgId,final String talker,final Long created,final String content) {
         final RedPacketRuntime runtime=instance;
         if(runtime==null) {
             // Preserve the existing simulation when the native adapter is unsupported.
-            if(!silentSelected() && !Kernel.MODULE_OFF && ReceiptStore.permits(ReceiptConfig.Feature.RED_PACKET,Kernel.receiptAccount(),talker))Kernel.openReceiveUI(url,msgId,talker);
+            if(!silentSelected() && !Kernel.MODULE_OFF && ReceiptStore.permits(ReceiptConfig.Feature.RED_PACKET,Kernel.receiptAccount(),talker))Kernel.openReceiveUI(url,msgId,talker,content);
             else Kernel.T("rp: silent request skipped; native adapter unavailable");
             return;
         }
@@ -79,7 +82,7 @@ final class RedPacketRuntime implements RedPacketEngine.Host,RedPacketNative.Lis
                     long age=System.currentTimeMillis()-time;
                     if(age>300000 || age < -60000)return; // Do not claim historical sync/replay traffic.
                 }
-                RedPacketEngine.Packet packet=RedPacketEngine.parse(runtime.api.account(),talker,url,msgId);
+                RedPacketEngine.Packet packet=RedPacketEngine.parse(runtime.api.account(),talker,url,msgId,content);
                 if(packet==null) { Kernel.T("rp: unsupported red packet URL");return; }
                 ReceiptConfig rules=ReceiptStore.load(ReceiptConfig.Feature.RED_PACKET,packet.account);
                 if(!rules.enabled||!rules.permits(packet.talker)) {
@@ -108,17 +111,20 @@ final class RedPacketRuntime implements RedPacketEngine.Host,RedPacketNative.Lis
         if(!manual&&!owned)return;
         final String account=Kernel.receiptAccount(),talker=act.getIntent().getStringExtra("key_username");
         if(manual && (!ReceiptConfig.validId(account) || !ReceiptStore.permits(ReceiptConfig.Feature.RED_PACKET,account,talker)))return;
-        Kernel.T("rp ui scheduled manual="+manual+" page="+act.getClass().getSimpleName());
+        Kernel.T("rp ui scheduled manual="+manual+" owned="+owned+" page="+act.getClass().getSimpleName());
         final java.lang.ref.WeakReference<Activity> activity=new java.lang.ref.WeakReference<Activity>(act);
         final Handler main=new Handler(Looper.getMainLooper());
         final long delay=manual&&!owned?ReceiptStore.delay(ReceiptConfig.Feature.RED_PACKET,account):0;
         final long deadline=SystemClock.elapsedRealtime()+delay+12000;
         main.postDelayed(new Runnable() { public void run() {
             Activity current=activity.get();
-            if(current==null || current.isFinishing() || current.isDestroyed() || Kernel.MODULE_OFF || silentSelected())return;
+            if(current==null) { Kernel.T("rp ui stopped reason=activity-gone");return; }
+            if(current.isFinishing() || current.isDestroyed()) { Kernel.T("rp ui stopped reason=page-closed page="+current.getClass().getSimpleName());return; }
+            if(Kernel.MODULE_OFF || silentSelected()) { Kernel.T("rp ui stopped reason=mode-or-module-changed");return; }
             if(manual && (!account.equals(Kernel.receiptAccount()) || !ReceiptStore.permits(ReceiptConfig.Feature.RED_PACKET,account,talker)))return;
             if((manual || legacyClickAllowed(url)) && Kernel.tryClickKai(current))return;
             if(SystemClock.elapsedRealtime()<deadline)main.postDelayed(this,150);
+            else Kernel.T("rp ui timeout page="+current.getClass().getSimpleName()+" state="+Kernel.redPacketUiState(current));
         } },delay);
     }
     public long now() { return SystemClock.elapsedRealtime(); }
@@ -183,7 +189,7 @@ final class RedPacketRuntime implements RedPacketEngine.Host,RedPacketNative.Lis
     }
     public void legacy(RedPacketEngine.Attempt a) {
         if(silentSelected()) { engine.finish(a,"领取模式已变更",null);return; }
-        Kernel.openReceiveUI(a.packet.url,a.packet.msgId,a.packet.talker);
+        Kernel.openReceiveUI(a.packet.url,a.packet.msgId,a.packet.talker,a.packet.content);
     }
     public RedPacketEngine.Attempt legacy(String url,String sendId) { return engine.owned(url,sendId); }
     public void query(final RedPacketEngine.Attempt a,final RedPacketEngine.Query q) {

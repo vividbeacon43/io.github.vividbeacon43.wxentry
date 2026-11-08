@@ -117,6 +117,10 @@ public final class RedPacketEngineTest {
         check(RedPacketEngine.reply(" \n",true,rng)==null,"empty list never sends");
         check(RedPacketEngine.templates("x\nx\ny").size()==2,"duplicate templates removed");
         check("0.01".equals(RedPacketEngine.amount(1)) && "1.23".equals(RedPacketEngine.amount(123)),"integer currency formatting");
+        String source="<msg><appmsg><type>2001</type><skin>complete</skin></appmsg></msg>";
+        RedPacketEngine.Packet full=RedPacketEngine.parse(p.account,p.talker,p.url,p.msgId,source);
+        check(full!=null && source.equals(full.content),"complete source preserved in immutable delayed packet");
+        check(full.key().equals(p.key()),"native source metadata cannot change packet ownership or deduplication");
         System.out.println("PASS "+checks+" red packet state/ownership/template checks");
     }
 }

@@ -14,12 +14,15 @@ final class RedPacketEngine {
     static final int MAX_PENDING = 32;
     enum Stage { WAITING, QUERY, OPEN, DONE }
     static final class Packet {
-        final String account, talker, url, sendId;
+        final String account, talker, url, sendId, content;
         final int channel, msgType;
         final long msgId;
         Packet(String account, String talker, String url, String sendId, int channel, int msgType, long msgId) {
+            this(account,talker,url,sendId,channel,msgType,msgId,null);
+        }
+        Packet(String account, String talker, String url, String sendId, int channel, int msgType, long msgId, String content) {
             this.account=account; this.talker=talker; this.url=url; this.sendId=sendId;
-            this.channel=channel; this.msgType=msgType; this.msgId=msgId;
+            this.channel=channel; this.msgType=msgType; this.msgId=msgId; this.content=content;
         }
         String key() { return account + "|" + sendId; }
     }
@@ -146,6 +149,9 @@ final class RedPacketEngine {
     }
 
     static Packet parse(String account,String talker,String url,long msgId) {
+        return parse(account,talker,url,msgId,null);
+    }
+    static Packet parse(String account,String talker,String url,long msgId,String content) {
         if (empty(account) || empty(talker) || empty(url) || talker.indexOf('|')>=0 || account.indexOf('|')>=0) return null;
         try {
             URI uri=new URI(url);
@@ -162,7 +168,7 @@ final class RedPacketEngine {
             int channel=Integer.parseInt(values.get("channelid"));
             int type=values.containsKey("msgtype")?Integer.parseInt(values.get("msgtype")):1;
             if (id==null || !id.matches("[A-Za-z0-9_-]{1,256}") || channel<0 || type!=1) return null;
-            return new Packet(account,talker,url,id,channel,type,msgId);
+            return new Packet(account,talker,url,id,channel,type,msgId,content);
         } catch (Throwable malformed) { return null; }
     }
     static List<String> templates(String text) {
