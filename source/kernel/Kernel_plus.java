@@ -27,7 +27,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "250";
+    static final String BUILD = "252";
     public static final String EDITION = "plus";
     static final boolean RP_PREMIUM_EDITION = true;
     static final boolean TABLET_PREMIUM_EDITION = true;
@@ -496,6 +496,7 @@ static boolean wxVersionOk(Object actObj) {
         try { ImageRecallRuntime.start(cl); } catch (Throwable t) { T("ARIMG install-error " + t.getClass().getSimpleName()); }
         try { SnsForwardRuntime.start(cl); } catch (Throwable t) { T("ARSNSFORWARD install-error " + t.getClass().getSimpleName()); }
         try { SnsAdRuntime.start(cl); } catch (Throwable t) { T("ARSNSADS install-error " + t.getClass().getSimpleName()); }
+        try { SnsLocalRuntime.start(cl); } catch (Throwable t) { T("ARSNSLOCAL install-error " + t.getClass().getSimpleName()); }
         try { hookImgProbe(cl); } catch (Throwable t) { T("imgprobe hook err " + t); }
         try { hookD3(cl); } catch (Throwable t) { T("d3 probe hook err " + t); }
         try { hookCfgForce(cl); } catch (Throwable t) { T("cfg hook err " + t); }
@@ -6059,7 +6060,7 @@ static boolean wxVersionOk(Object actObj) {
     enum MenuAction {
         MARK_READ, CLEAR_CHATS, UNFOLLOW_BIZ, RP_GROUPS, RP_TOGGLE, RP_RECEIVE_MODE, RP_SETTINGS, RP_TEMPLATES, RP_HISTORY, RP_DELAY, TRANSFER_TOGGLE, TRANSFER_LISTS, TRANSFER_DELAY, ANTI_TOGGLE,
         REALNAME_TOGGLE, ORIGINAL_TOGGLE, NEWROOM_TOGGLE, CHECK_UPDATE, WISH,
-        SNS_TOGGLE, RESTART, DIAGNOSTICS, APK_UPDATE, ACTIVATION, DONATE, TABLET_MODE, TABLET_QR, ORIGINAL_DOWNLOAD, ORIGINAL_LISTS, SNS_FORWARD, SNS_AD_BLOCK
+        SNS_TOGGLE, RESTART, DIAGNOSTICS, APK_UPDATE, ACTIVATION, DONATE, TABLET_MODE, TABLET_QR, ORIGINAL_DOWNLOAD, ORIGINAL_LISTS, SNS_FORWARD, SNS_AD_BLOCK, SNS_LOCAL_LIKES, SNS_LOCAL_COMMENTS, SNS_LOCAL_PRESETS, SNS_LOCAL_CLEAR
     }
     enum MenuCategory {
         CHAT("聊天"), RED_PACKET("红包"), MOMENTS("朋友圈"), ANTI_RECALL("防撤回"), SUPPORT("设置与支持"), EXPERIMENTAL("实验功能");
@@ -6121,7 +6122,7 @@ static boolean wxVersionOk(Object actObj) {
                 }
                 break;
             case MOMENTS:
-                if(momentsPremiumEnabled()){addMenuAction(rows,MenuAction.SNS_FORWARD,"");addMenuAction(rows,MenuAction.SNS_AD_BLOCK,"");}
+                if(momentsPremiumEnabled()){addMenuAction(rows,MenuAction.SNS_FORWARD,"");addMenuAction(rows,MenuAction.SNS_AD_BLOCK,"");addMenuAction(rows,MenuAction.SNS_LOCAL_LIKES,"");addMenuAction(rows,MenuAction.SNS_LOCAL_COMMENTS,"");addMenuAction(rows,MenuAction.SNS_LOCAL_PRESETS,"伪评论内容预设");addMenuAction(rows,MenuAction.SNS_LOCAL_CLEAR,"清空本地互动记录");}
                 break;
             case ANTI_RECALL:
                 addMenuAction(rows, MenuAction.ANTI_TOGGLE, "");
@@ -6167,6 +6168,8 @@ static boolean wxVersionOk(Object actObj) {
             case SNS_TOGGLE: item.label = "朋友圈防撤回"; break;
             case SNS_FORWARD: item.label="朋友圈一键转发";break;
             case SNS_AD_BLOCK: item.label="朋友圈去广告";break;
+            case SNS_LOCAL_LIKES:item.label="朋友圈伪集赞";break;
+            case SNS_LOCAL_COMMENTS:item.label="朋友圈伪评论";break;
             default: break;
         }
     }
@@ -6206,6 +6209,10 @@ static boolean wxVersionOk(Object actObj) {
             case SNS_TOGGLE: toggleFlag(WXDIR + "sns.keep.del.on", "朋友圈防撤回"); break;
             case SNS_FORWARD:setMomentsToggle(act,MomentsConfig.Feature.FORWARD,!MomentsSettings.configured(MomentsConfig.Feature.FORWARD));break;
             case SNS_AD_BLOCK:setMomentsToggle(act,MomentsConfig.Feature.AD_BLOCK,!MomentsSettings.configured(MomentsConfig.Feature.AD_BLOCK));break;
+            case SNS_LOCAL_LIKES:SnsLocalSettings.toggle(act,SnsLocalData.Feature.LIKES,!SnsLocalStore.enabled(SnsLocalData.Feature.LIKES));break;
+            case SNS_LOCAL_COMMENTS:SnsLocalSettings.toggle(act,SnsLocalData.Feature.COMMENTS,!SnsLocalStore.enabled(SnsLocalData.Feature.COMMENTS));break;
+            case SNS_LOCAL_PRESETS:SnsLocalSettings.presets(act);break;
+            case SNS_LOCAL_CLEAR:SnsLocalSettings.clear(act);break;
             case CHECK_UPDATE:
                 checkKernelUpdate(act);
                 refreshVerLine(act, tVer);
@@ -6249,6 +6256,8 @@ static boolean wxVersionOk(Object actObj) {
             case SNS_TOGGLE:return f(WXDIR+"sns.keep.del.on");
             case SNS_FORWARD:return snsForwardEnabled();
             case SNS_AD_BLOCK:return snsAdBlockEnabled();
+            case SNS_LOCAL_LIKES:return SnsLocalStore.enabled(SnsLocalData.Feature.LIKES);
+            case SNS_LOCAL_COMMENTS:return SnsLocalStore.enabled(SnsLocalData.Feature.COMMENTS);
             case TABLET_MODE:return "1".equals(callMainStr("tabletModeConfigured"));
             default:return null;
         }
@@ -6263,6 +6272,8 @@ static boolean wxVersionOk(Object actObj) {
         }
         if(row.action==MenuAction.SNS_FORWARD)return setMomentsToggle(act,MomentsConfig.Feature.FORWARD,on);
         if(row.action==MenuAction.SNS_AD_BLOCK)return setMomentsToggle(act,MomentsConfig.Feature.AD_BLOCK,on);
+        if(row.action==MenuAction.SNS_LOCAL_LIKES)return SnsLocalSettings.toggle(act,SnsLocalData.Feature.LIKES,on);
+        if(row.action==MenuAction.SNS_LOCAL_COMMENTS)return SnsLocalSettings.toggle(act,SnsLocalData.Feature.COMMENTS,on);
         if(row.action==MenuAction.RP_DELAY)return ReceiptSettings.setDelayEnabled(act,ReceiptConfig.Feature.RED_PACKET,on,null);
         if(row.action==MenuAction.TRANSFER_DELAY)return ReceiptSettings.setDelayEnabled(act,ReceiptConfig.Feature.TRANSFER,on,null);
         if(menuToggleValue(row)!=null && menuToggleValue(row).booleanValue()!=on)performMenuAction(act,row,version,null);
@@ -6329,7 +6340,7 @@ static boolean wxVersionOk(Object actObj) {
                             final MenuEntry entry=getItem(position);refreshMenuLabelSafe(entry);
                             Boolean checked=menuToggleValue(entry);
                             if(checked!=null) {
-                                String detail=entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TRANSFER_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.TRANSFER):entry.action==MenuAction.TABLET_MODE?"开启或关闭后需重启微信，登录页生效":entry.action==MenuAction.SNS_FORWARD?"长按目标进入发表页，需手动发表":entry.action==MenuAction.SNS_AD_BLOCK?"过滤微信广告，刷新朋友圈生效":entry.action==MenuAction.ORIGINAL_DOWNLOAD?"收到或打开图片时按名单下载可用原图，独立于防撤回":"";
+                                String detail=entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TRANSFER_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.TRANSFER):entry.action==MenuAction.TABLET_MODE?"开启或关闭后需重启微信，登录页生效":entry.action==MenuAction.SNS_FORWARD?"长按目标进入发表页，需手动发表":entry.action==MenuAction.SNS_AD_BLOCK?"过滤微信广告，刷新朋友圈生效":entry.action==MenuAction.SNS_LOCAL_LIKES?"长按文案选择好友，仅本机展示":entry.action==MenuAction.SNS_LOCAL_COMMENTS?"长按文案添加评论，仅本机展示":entry.action==MenuAction.ORIGINAL_DOWNLOAD?"收到或打开图片时按名单下载可用原图，独立于防撤回":"";
                                 SettingsUi.ToggleRow row=SettingsUi.toggle(act,entry.label,detail,checked.booleanValue(),new SettingsUi.Change() {
                                     public boolean set(boolean on) { boolean saved=setMenuToggle(act,entry,on,tVer,renderMenu[0]);notifyDataSetChanged();return saved; }
                                 });

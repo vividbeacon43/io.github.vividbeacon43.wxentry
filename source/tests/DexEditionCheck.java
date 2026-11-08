@@ -41,7 +41,7 @@ public final class DexEditionCheck {
         Map<String,String> values=new HashMap<>();
         for(Field f:kernel.getStaticFields())if(f.getInitialValue() instanceof StringEncodedValue)
             values.put(f.getName(),((StringEncodedValue)f.getInitialValue()).getValue());
-        if(!args[1].equals(values.get("EDITION"))||!"250".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
+        if(!args[1].equals(values.get("EDITION"))||!"252".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
         for(String name:new String[]{"RedPacketUi","RedPacketUiNative","RedPacketPolicy","RedPacketEngine","RedPacketNative","RedPacketRuntime","RedPacketSettings"})
             if(!red.contains(root+name+";"))throw new AssertionError("Red packet runtime missing: "+name);
         boolean contextAtBoot=false, nativeUiDelegate=false, fullNativeEntry=false;
@@ -75,6 +75,15 @@ public final class DexEditionCheck {
                 if(ref instanceof StringReference && ((StringReference)ref).getString().equals("Zb"))throw new AssertionError("Annotation allocates a new native message");
             }
         boolean premium=args[1].equals("plus")||args[1].equals("vip");
+        for(String name:new String[]{"SnsLocalRuntime","SnsLocalNative","SnsLocalPicker","SnsLocalPanel"})if(receiptClasses.contains(root+name+";")!=premium)throw new AssertionError("Local Moments paid boundary failed: "+name);
+        for(String name:new String[]{"SnsLocalData","SnsLocalStore","SnsLocalSettings"})if(!receiptClasses.contains(root+name+";"))throw new AssertionError("Local Moments settings missing");
+        boolean localStart=false;
+        for(Method m:kernel.getMethods())if(m.getName().equals("boot0")&&m.getImplementation()!=null)for(Instruction i:m.getImplementation().getInstructions())if(i instanceof ReferenceInstruction){Reference ref=((ReferenceInstruction)i).getReference();if(ref instanceof MethodReference&&((MethodReference)ref).getDefiningClass().equals(root+"SnsLocalRuntime;")&&((MethodReference)ref).getName().equals("start"))localStart=true;}
+        if(localStart!=premium)throw new AssertionError("Local Moments runtime boot boundary failed");
+        for(ClassDef c:dex.getClasses())if(c.getType().startsWith(root+"SnsLocal"))for(Method m:c.getMethods())if(m.getImplementation()!=null)for(Instruction i:m.getImplementation().getInstructions())if(i instanceof ReferenceInstruction){Reference ref=((ReferenceInstruction)i).getReference();
+            if(ref instanceof MethodReference){MethodReference call=(MethodReference)ref;String name=call.getName();if(Arrays.asList("execSQL","insertWithOnConflict","rawQuery","setObjectField","setIntField","performClick","callOnClick","sendBroadcast").contains(name)||call.getDefiningClass().startsWith("Lcom/tencent/mm/modelbase/"))throw new AssertionError("Local Moments must not modify native SNS records or submit social actions");}
+            if(ref instanceof StringReference){String value=((StringReference)ref).getString();if(Arrays.asList("com.tencent.mm.plugin.sns.model.y7","com.tencent.mm.autogen.events.SnsRepostEvent","/cgi-bin/micromsg-bin/mmsnscomment","/cgi-bin/micromsg-bin/mmsnspost").contains(value))throw new AssertionError("Local Moments social submission protocol forbidden");}
+        }
         boolean premiumFlag=false,seenFlag=false;
         for(Field f:kernel.getStaticFields())if(f.getName().equals("RP_PREMIUM_EDITION") && f.getInitialValue() instanceof BooleanEncodedValue) {
             premiumFlag=((BooleanEncodedValue)f.getInitialValue()).getValue();seenFlag=true;
@@ -153,6 +162,6 @@ public final class DexEditionCheck {
                 }
             }
         if(!singleChoice || multiChoice || !frontLabel || !silentLabel)throw new AssertionError("Receive mode is not an explicit mutually exclusive picker");
-        System.out.println("PASS edition="+args[1]+" BUILD=250 voice=true forward=true receipt=true redpacket_premium="+premium+" receive_mode="+(args[1].equals("free")?"foreground-auto-open":"single-choice")+" image="+premium+" tablet_premium="+premium+" media_prefetch=true original_download=true");
+        System.out.println("PASS edition="+args[1]+" BUILD=252 voice=true forward=true receipt=true redpacket_premium="+premium+" receive_mode="+(args[1].equals("free")?"foreground-auto-open":"single-choice")+" image="+premium+" tablet_premium="+premium+" media_prefetch=true original_download=true");
     }
 }

@@ -1,4 +1,4 @@
-# v250 验证
+# v252 验证
 
 - PASS 29 voice callback behavior checks
 - PASS 45 voice forwarding behavior checks
@@ -15,6 +15,8 @@
 - PASS 15 signed paid tablet entitlement, downgrade and tampering checks
 - PASS 35 media cache expiry, retention, restore, identity and independent original policy checks
 - PASS 31 native media interception, original mode, queued list/owner and failure behavior checks
+- PASS 48 local Moments codec, immutable edits, identity and bounded retention checks
+- PASS 43 local Moments account isolation, paid grants, atomic failure, corrupt recovery and size cleanup checks
 - PASS 35 Moments switch/account/entitlement and native ad-page filtering checks
 - PASS 59 SNS draft eligibility, native editor extras, cancellation, account and owned-file behavior checks
 - True
@@ -35,11 +37,24 @@
 - PASS 91 native SNS long-press, source, downloads and composer contracts
 - PASS 6 native Moments merged-page and advertising marker contracts
 - PASS 37 native complete red packet entry, page selector and application route contracts
+- PASS 20 native local Moments post binding, view pooling, avatar and profile contracts
 - PASS 168 framework DEX ordering/search/body/immutability checks
 - PASS 81 final DEX enum reflection contracts
 - PASS 6 signed loader upgrade/rollback checks
 - PASS 8 APK manifest protocol and delivery checks
 
-本版测试实际原生入口适配类、完整消息与皮肤模型传递、会话和消息参数、晚加载上下文恢复、延时交接及无可点击按钮时的超时诊断。原微信APK检查确认钱包入口、与聊天点击相同的新旧页面选择条件及Application路由的NEW_TASK处理。
+手机：原微信8.0.80（3220）、Android14，现有已验证高级版账号；最终安装APK2.11和动态内核v252，核对设备实际APK及内核缓存字节与签名构建报告一致。
 
-手机测试范围见validation.json；未把原生接口静态检查或桩测试表述为实际免费红包到账验收。测试机此前锁屏，本次只记录真实可完成的安装、最终字节和启动兼容检查。没有为本次验收收取红包、转账或向联系人发送消息。用户13:43上传报告仅用于定位，不随源码分发。
+实际完成：
+
+- 两个新开关默认关闭、右侧小滑块显示正常，独立启停并重启保留。
+- 长按朋友圈文案出现伪集赞、伪评论与既有一键转发，原生文本浮动菜单和列表菜单均可操作。
+- 多选两名好友生成本地点赞，真实头像加载，点击头像打开对应好友资料。
+- 通过菜单保存临时评论预设；批量选择两位好友并逐人选择预设、保存两条评论。
+- 评论头像及姓名点击打开相应好友原生资料页；长按姓名仅编辑，不再同时误开资料。
+- 修改保存单条评论、删除另一条评论，点赞和其余评论保持；重启后剩余记录仍保留。
+- 在已有原生文字、表情、图片评论的朋友圈添加本地点赞和评论，原生评论保留；单条清理后只有本地生成的部分消失。
+- 滚动到其他朋友圈未出现测试记录串位；重新进入仍定位原目标。关闭伪集赞后仅保留伪评论显示。
+- 使用“清空本地互动记录”清理全部测试记录，预设编辑框删除临时预设，两个开关恢复关闭；既有转发和去广告开关保持开启。最终文件和菜单状态由私有验收脚本复核。
+
+未提交真实点赞、评论、朋友圈或联系人消息，未操作真实收款，也未切换或解绑测试账号；免费/VIP权限、失效授权、账号隔离及异常文件等边界用行为/DEX测试验证，不声称在手机上切换了真实账号或付费等级。未实际验收所有微信版本、全部点赞组合、深色模式、大字体以及最大数量展开。头像和原生资料路由随当前微信版本适配。测试日志、联系人和截图不随源码打包。
