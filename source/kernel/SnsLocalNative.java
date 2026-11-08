@@ -3,6 +3,7 @@ package com.zafiro.wxentry.kernel;
 import android.app.Activity;
 import android.content.*;
 import android.os.Bundle;
+import android.graphics.drawable.Drawable;
 import android.view.*;
 import android.widget.*;
 import de.robv.android.xposed.XposedHelpers;
@@ -20,6 +21,9 @@ final class SnsLocalNative {
         cl=loader;infoType=cls("com.tencent.mm.plugin.sns.storage.SnsInfo");modelType=cls("cl4.p");itemType=cls("yk4.o2");interactionType=cls("com.tencent.mm.plugin.sns.ui.improve.view.ImproveInteractionLayout");handlerType=cls("zk4.g");
         itemType.getDeclaredMethod("q");itemType.getDeclaredMethod("getCommentView");cls("yk4.d2").getDeclaredMethod("getCommentContainer");
         modelType.getDeclaredMethod("Y0");modelType.getDeclaredMethod("a1");interactionType.getDeclaredMethod("getLikeLayout");interactionType.getDeclaredMethod("getCommentLayout");
+        interactionType.getConstructor(Context.class);interactionType.getDeclaredMethod("getDivider");
+        Class<?> likes=cls("com.tencent.mm.plugin.sns.ui.SnsLikesTextView");likes.getConstructor(Context.class,android.util.AttributeSet.class);likes.getDeclaredField("i");likes.getDeclaredField("m");likes.getDeclaredField("h");
+        cls("com.tencent.mm.plugin.sns.data.g1").getDeclaredMethod("g",Context.class,int.class,int.class,int.class,boolean.class);cls("iu5.w").getConstructor(Drawable.class,int.class);
         avatar=cls("com.tencent.mm.pluginsdk.ui.u").getDeclaredMethod("a",ImageView.class,String.class);
         if(!Modifier.isStatic(avatar.getModifiers())||avatar.getReturnType()!=void.class)throw new NoSuchMethodException("Native avatar loader changed");
         profile=cls("yc5.l").getDeclaredMethod("j",Context.class,String.class,String.class,Intent.class,Bundle.class);
@@ -55,6 +59,25 @@ final class SnsLocalNative {
     }
     static Set<String> realLikes(Object model){Set<String> result=new HashSet<String>();try{Object sns=XposedHelpers.callMethod(model,"a1");Object list=XposedHelpers.getObjectField(sns,"LikeUserList");if(list instanceof List)for(Object p:(List<?>)list){Object id=XposedHelpers.getObjectField(p,"d");if(id instanceof String)result.add((String)id);}}catch(Throwable unavailable){}return result;}
     static void avatar(ImageView image,String user)throws Throwable{if(!SnsLocalData.friend(user))throw new IllegalArgumentException("Invalid local profile");avatar.invoke(null,image,user);}
+    static View interaction(Context context)throws Throwable{return (View)interactionType.getConstructor(Context.class).newInstance(context);}
+    static View likesView(Context context)throws Throwable{return (View)cls("com.tencent.mm.plugin.sns.ui.SnsLikesTextView").getConstructor(Context.class,android.util.AttributeSet.class).newInstance(context,null);}
+    static TextView likesLabel(Object view){return (TextView)XposedHelpers.getObjectField(view,"i");}
+    static CharSequence likesText(Object view){Object value=XposedHelpers.getObjectField(view,"m");return value instanceof CharSequence?(CharSequence)value:likesLabel(view).getText();}
+    static void likeStyle(View local,View source){
+        local.setPadding(source.getPaddingLeft(),source.getPaddingTop(),source.getPaddingRight(),source.getPaddingBottom());
+        TextView to=likesLabel(local),from=likesLabel(source);to.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,from.getTextSize());to.setTypeface(from.getTypeface());to.setIncludeFontPadding(from.getIncludeFontPadding());to.setLineSpacing(from.getLineSpacingExtra(),from.getLineSpacingMultiplier());
+        try{Object config=XposedHelpers.getStaticObjectField(cls("dk4.a"),"a");if(Boolean.TRUE.equals(XposedHelpers.callMethod(config,"a"))){int padding=((Number)XposedHelpers.callStaticMethod(cls("af5.a"),"b",local.getContext(),6)).intValue();local.setPadding(local.getPaddingLeft(),padding,local.getPaddingRight(),padding);}}catch(Throwable ignored){}
+    }
+    static int linkColor(Context context){return context.getResources().getColor(2131099991);}
+    static Object heart(Context context)throws Throwable{
+        int size=((Number)XposedHelpers.callStaticMethod(cls("af5.a"),"h",context,2131165473)).intValue(),space=((Number)XposedHelpers.callStaticMethod(cls("af5.a"),"h",context,2131165396)).intValue();
+        Drawable drawable=(Drawable)XposedHelpers.callStaticMethod(cls("com.tencent.mm.plugin.sns.data.g1"),"g",context,size,size,space,false);
+        return cls("iu5.w").getConstructor(Drawable.class,int.class).newInstance(drawable,1);
+    }
+    static LinearLayout.LayoutParams interactionParams()throws Throwable{
+        Object config=XposedHelpers.getStaticObjectField(cls("yk4.d2"),"G");LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);
+        params.topMargin=((Number)XposedHelpers.callMethod(config,"g")).intValue();params.bottomMargin=((Number)XposedHelpers.callMethod(config,"b")).intValue();return params;
+    }
     static void profile(Activity act,String owner,String user){
         if(act==null||act.isFinishing()||act.isDestroyed()||!Kernel.momentsPremiumEnabled()||!owner.equals(Kernel.receiptAccount())||!SnsLocalData.friend(user))return;
         try{Intent intent=new Intent();intent.putExtra("Contact_User",user);intent.putExtra("Contact_Scene",37);profile.invoke(null,act,"profile",".ui.ContactInfoUI",intent,null);Kernel.T("ARSNSLOCAL profile-opened");}

@@ -6,7 +6,7 @@ import java.util.*;
 
 /** Immutable, bounded local presentation data. Contains no native comment IDs or server operations. */
 final class SnsLocalData {
-    static final int MAX_POSTS=200,MAX_LIKES=100,MAX_COMMENTS=100,MAX_PRESETS=50,MAX_TEXT=500,MAX_BYTES=2*1024*1024;
+    static final int MAX_POSTS=200,MAX_COMMENTS=100,MAX_PRESETS=50,MAX_TEXT=500,MAX_BYTES=8*1024*1024;
     enum Feature { LIKES, COMMENTS }
     static final class Person {
         final String id,name;
@@ -19,7 +19,7 @@ final class SnsLocalData {
     static final class Post {
         final String key;final long updated;final List<Person> likes;final List<Comment> comments;
         Post(String key,long updated,List<Person> likes,List<Comment> comments){
-            if(!postKey(key)||updated<0||likes==null||comments==null||likes.size()>MAX_LIKES||comments.size()>MAX_COMMENTS)throw new IllegalArgumentException("Invalid local post");
+            if(!postKey(key)||updated<0||likes==null||comments==null||comments.size()>MAX_COMMENTS)throw new IllegalArgumentException("Invalid local post");
             Set<String> ids=new HashSet<String>();for(Person p:likes)if(p==null||!ids.add(p.id))throw new IllegalArgumentException("Duplicate local like");
             ids.clear();for(Comment c:comments)if(c==null||!ids.add(c.localId))throw new IllegalArgumentException("Duplicate local comment");
             this.key=key;this.updated=updated;this.likes=Collections.unmodifiableList(new ArrayList<Person>(likes));this.comments=Collections.unmodifiableList(new ArrayList<Comment>(comments));
@@ -78,7 +78,7 @@ final class SnsLocalData {
             String line=lines[i];if(line.isEmpty())throw new IllegalArgumentException("Empty local record");int at=line.indexOf('=');if(at<1)throw new IllegalArgumentException("Invalid local record");String type=line.substring(0,at),value=line.substring(at+1);String[] f=value.split("\\|",-1);
             if(type.equals("template")){if(!times.isEmpty())throw new IllegalArgumentException("Late template");presets.add(comment(unhex(value)));if(presets.size()>MAX_PRESETS)throw new IllegalArgumentException("Too many presets");}
             else if(type.equals("post")&&f.length==2&&postKey(f[0])){long time=Long.parseLong(f[1]);if(time<0||times.put(f[0],time)!=null||times.size()>MAX_POSTS)throw new IllegalArgumentException("Invalid local post");likes.put(f[0],new ArrayList<Person>());comments.put(f[0],new ArrayList<Comment>());}
-            else if(type.equals("like")&&f.length==3&&times.containsKey(f[0])){likes.get(f[0]).add(new Person(unhex(f[1]),unhex(f[2])));if(likes.get(f[0]).size()>MAX_LIKES)throw new IllegalArgumentException("Too many local likes");}
+            else if(type.equals("like")&&f.length==3&&times.containsKey(f[0])){likes.get(f[0]).add(new Person(unhex(f[1]),unhex(f[2])));}
             else if(type.equals("comment")&&f.length==5&&times.containsKey(f[0])){comments.get(f[0]).add(new Comment(f[1],new Person(unhex(f[2]),unhex(f[3])),unhex(f[4])));if(comments.get(f[0]).size()>MAX_COMMENTS)throw new IllegalArgumentException("Too many local comments");}
             else throw new IllegalArgumentException("Unknown local record");
         }

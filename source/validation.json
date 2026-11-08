@@ -1,6 +1,6 @@
 {
-  "version": "252",
-  "apk_target_version": "2.11",
+  "version": "254",
+  "apk_target_version": "2.13",
   "checks": {
     "voice_callback_behavior": "PASS 29 voice callback behavior checks",
     "voice_forward_behavior": "PASS 45 voice forwarding behavior checks",
@@ -17,8 +17,9 @@
     "tablet_signed_paid_entitlement": "PASS 15 signed paid tablet entitlement, downgrade and tampering checks",
     "media_cache_and_original_policy": "PASS 35 media cache expiry, retention, restore, identity and independent original policy checks",
     "media_revoke_original_queue_behavior": "PASS 31 native media interception, original mode, queued list/owner and failure behavior checks",
-    "local_moments_immutable_codec": "PASS 48 local Moments codec, immutable edits, identity and bounded retention checks",
+    "local_moments_immutable_codec": "PASS 49 local Moments codec, immutable edits, identity and bounded retention checks",
     "local_moments_private_accounts_and_retention": "PASS 43 local Moments account isolation, paid grants, atomic failure, corrupt recovery and size cleanup checks",
+    "local_moments_all_and_random_selection": "PASS 67 all-friend and random-count selection, uniqueness, range and non-mutating checks",
     "moments_switches_and_native_ad_filter": "PASS 35 Moments switch/account/entitlement and native ad-page filtering checks",
     "sns_forward_draft_preview_only": "PASS 59 SNS draft eligibility, native editor extras, cancellation, account and owned-file behavior checks",
     "v212_voice_image_sources_and_delivery_policy_preserved": true,
@@ -39,25 +40,25 @@
     "native_sns_forward_contracts": "PASS 91 native SNS long-press, source, downloads and composer contracts",
     "native_sns_ad_contracts": "PASS 6 native Moments merged-page and advertising marker contracts",
     "native_complete_redpacket_ui_contracts": "PASS 37 native complete red packet entry, page selector and application route contracts",
-    "native_local_moments_contracts": "PASS 20 native local Moments post binding, view pooling, avatar and profile contracts"
+    "native_local_moments_contracts": "PASS 35 native local Moments post binding, view pooling, avatar and profile contracts"
   },
   "editions": {
     "free": {
-      "sha256": "10e7df74d4ee19128f2fa7d2f534eff4d8d058fbe71b44abb1f863b974ff9010",
-      "bytes": 455252,
-      "check": "PASS edition=free BUILD=252 voice=true forward=true receipt=true redpacket_premium=false receive_mode=foreground-auto-open image=false tablet_premium=false media_prefetch=true original_download=true",
+      "sha256": "2c41551603557ba57055634a52ead2f5f88a0de480c85ef65b2708c5ec4de00c",
+      "bytes": 456584,
+      "check": "PASS edition=free BUILD=254 voice=true forward=true receipt=true redpacket_premium=false receive_mode=foreground-auto-open image=false tablet_premium=false media_prefetch=true original_download=true",
       "signature_verified": true
     },
     "plus": {
-      "sha256": "fdba9aa90f90491b7a3f01e2d7111ae9772d4dbdead2b79374a3123795897177",
-      "bytes": 548900,
-      "check": "PASS edition=plus BUILD=252 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true tablet_premium=true media_prefetch=true original_download=true",
+      "sha256": "e5651a7403ad02fb5290c6694a530de8eeaa1d69b37c789a5bf1750b37763535",
+      "bytes": 555264,
+      "check": "PASS edition=plus BUILD=254 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true tablet_premium=true media_prefetch=true original_download=true",
       "signature_verified": true
     },
     "vip": {
-      "sha256": "0cfc6ddb9a9f27bcc4f83ac46bd2a019e3a6151671276127ee9059a358f7a594",
-      "bytes": 548896,
-      "check": "PASS edition=vip BUILD=252 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true tablet_premium=true media_prefetch=true original_download=true",
+      "sha256": "d8bb14f14dd244a7d2902f382ad73fd0f803187b19c354e1816729a5f2b0db03",
+      "bytes": 555264,
+      "check": "PASS edition=vip BUILD=254 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true tablet_premium=true media_prefetch=true original_download=true",
       "signature_verified": true
     }
   },
@@ -67,40 +68,45 @@
   "native_apk_sha256": "9d9b6c516e8e07e437c81485fde21fe13ce4f61b37d19e793fff40c71be39c0e",
   "phone_validation": {
     "phone_tested": true,
-    "apk_version": "2.11",
-    "kernel_version": "252",
+    "apk_version": "2.13",
+    "kernel_version": "254",
     "edition": "plus",
     "wechat": "8.0.80 (3220)",
     "android": "14",
-    "apk_sha256": "ff0cf84a1a78a490732fd04969aa4129eefc0149692801141f0327b681ead1e0",
-    "kernel_sha256": "fdba9aa90f90491b7a3f01e2d7111ae9772d4dbdead2b79374a3123795897177",
+    "apk_sha256": "6776c909a8279f8e399527cabf2fd9c5c515a2285b8d65a12dd7a847181d6c98",
+    "kernel_sha256": "e5651a7403ad02fb5290c6694a530de8eeaa1d69b37c789a5bf1750b37763535",
     "exact_final_bytes_verified": true,
-    "two_default_off_switches_verified": true,
-    "multi_friend_picker_verified": true,
-    "native_avatar_and_profile_verified": true,
-    "comment_name_profile_verified": true,
-    "comment_presets_verified": true,
-    "batch_comments_verified": true,
-    "comment_edit_delete_verified": true,
-    "long_press_no_profile_click_verified": true,
-    "restart_persistence_verified": true,
-    "genuine_text_emoji_image_comment_preserved": true,
-    "per_post_cleanup_verified": true,
+    "native_heart_and_comma_separated_names_verified": true,
+    "light_and_dark_native_layout_verified": true,
+    "final_dark_dialog_action_contrast_verified": true,
+    "all_30_real_contacts_selected": true,
+    "prior_40_entry_expand_and_profile_tested": true,
+    "system_service_filter_pool_30_verified": true,
+    "random_4_saved_and_restart_persistence_verified": true,
+    "random_zero_rejected_in_dialog_verified": true,
+    "random_cancel_preserves_all_30_verified": true,
+    "native_genuine_two_likes_preserved": true,
+    "genuine_profile_link_preserved": true,
+    "local_profile_link_verified": true,
+    "per_post_clear_restores_genuine_likes": true,
     "all_records_cleanup_verified": true,
-    "scroll_reuse_verified": true,
-    "independent_switch_hiding_verified": true,
     "temporary_local_test_data_cleared": true,
     "temporary_presets_cleared": true,
     "final_new_switches_off": true,
     "existing_forward_and_ad_switches_preserved": true,
+    "genuine_image_comment_test_this_release": false,
+    "prior_v252_comment_tests_preserved_as_baseline": true,
+    "charging_stay_awake_enabled": true,
+    "charging_stay_awake_value": 7,
+    "charging_stay_awake_user_requested_persistent": true,
+    "temporary_theme_test_restored": true,
     "published_post": false,
     "sent_real_like_or_comment": false,
     "sent_contact_messages": false,
     "real_transfer_tested": false,
     "real_redpacket_tested": false,
     "sns_composer_tested": false,
-    "final_time": "2026-11-08T18:51:36.116910",
-    "original_power_setting_restored": true
+    "final_time": "2026-11-08T22:29:24.378919"
   },
   "qr_visible_verified": false,
   "login_confirmed": false,
@@ -126,27 +132,33 @@
   "free_redpacket_foreground_auto_open": true,
   "empty_enabled_whitelist_all": true,
   "transfer_missing_xml_fee_native_query_verified": true,
-  "behavior_and_contract_checks": 1575,
+  "behavior_and_contract_checks": 1658,
   "framework_dex_checks": 168,
   "final_dex_enum_contracts": 81,
   "legacy_loader_compatibility": {
     "2.05": "PASS 168 framework DEX ordering/search/body/immutability checks",
     "2.07": "PASS 168 framework DEX ordering/search/body/immutability checks",
-    "2.09": "PASS 168 framework DEX ordering/search/body/immutability checks"
+    "2.09": "PASS 168 framework DEX ordering/search/body/immutability checks",
+    "2.11": "PASS 168 framework DEX ordering/search/body/immutability checks"
   },
   "apk_manifest_contract": {
     "checks": "PASS 8 APK manifest protocol and delivery checks",
     "versions": [
-      "2.11",
-      "2.12"
+      "2.13",
+      "2.14"
     ],
     "loader_signature_protocol": "v|name|sha256"
   },
   "signed_loader_rollback_checks": 6,
-  "apk_version": "2.11",
+  "apk_version": "2.13",
   "apk_certificate_preserved": true,
   "backend_unchanged": true,
-  "source_baseline": "250",
+  "source_baseline": "252",
+  "moments_native_like_layout": true,
+  "moments_all_friend_selection": true,
+  "moments_random_count_selection": true,
+  "moments_fixed_like_count_cap_removed": true,
+  "moments_system_service_contacts_excluded": true,
   "moments_local_only": true,
   "moments_local_paid_only": true,
   "moments_local_switches_default_off": true,
@@ -155,9 +167,9 @@
   "moments_local_native_sns_unchanged": true,
   "signed_cache_preserved": true,
   "loader": {
-    "versionCode": 111,
-    "versionName": "2.11",
-    "sha256": "0d9d5af7142a946d6c417f980bed0b51927b1b55f26ae2349283a36e972fb6d7",
+    "versionCode": 113,
+    "versionName": "2.13",
+    "sha256": "73323b29c963d0792b3dcc45e78e5ede9fe98d7b766a49ddf5177802c6da6ae2",
     "bytes": 484448,
     "checks": "PASS 168 framework DEX ordering/search/body/immutability checks",
     "enum_contracts": "PASS 81 final DEX enum reflection contracts",
@@ -166,32 +178,32 @@
     "runtime_dependency_source_sha256": "fe3e12c45acf75f92369685fd02d1d7a7323385dc725680a9b98a0dac0ea554b",
     "single_dex": true,
     "kernel_inputs": {
-      "free": "10e7df74d4ee19128f2fa7d2f534eff4d8d058fbe71b44abb1f863b974ff9010",
-      "plus": "fdba9aa90f90491b7a3f01e2d7111ae9772d4dbdead2b79374a3123795897177",
-      "vip": "0cfc6ddb9a9f27bcc4f83ac46bd2a019e3a6151671276127ee9059a358f7a594"
+      "free": "2c41551603557ba57055634a52ead2f5f88a0de480c85ef65b2708c5ec4de00c",
+      "plus": "e5651a7403ad02fb5290c6694a530de8eeaa1d69b37c789a5bf1750b37763535",
+      "vip": "d8bb14f14dd244a7d2902f382ad73fd0f803187b19c354e1816729a5f2b0db03"
     }
   },
   "apks": {
-    "2.11": {
-      "versionCode": 111,
-      "versionName": "2.11",
-      "sha256": "ff0cf84a1a78a490732fd04969aa4129eefc0149692801141f0327b681ead1e0",
+    "2.13": {
+      "versionCode": 113,
+      "versionName": "2.13",
+      "sha256": "6776c909a8279f8e399527cabf2fd9c5c515a2285b8d65a12dd7a847181d6c98",
       "bytes": 459906,
       "same_signer": true,
       "v1_v2_v3_verified": true,
-      "loader_sha256": "0d9d5af7142a946d6c417f980bed0b51927b1b55f26ae2349283a36e972fb6d7",
-      "embedded_free_sha256": "10e7df74d4ee19128f2fa7d2f534eff4d8d058fbe71b44abb1f863b974ff9010",
+      "loader_sha256": "73323b29c963d0792b3dcc45e78e5ede9fe98d7b766a49ddf5177802c6da6ae2",
+      "embedded_free_sha256": "2c41551603557ba57055634a52ead2f5f88a0de480c85ef65b2708c5ec4de00c",
       "phone_tested": true
     },
-    "2.12": {
-      "versionCode": 112,
-      "versionName": "2.12",
-      "sha256": "3a959845ca7190c30df0cc24a6ad010dfd85f3c45d652faf10c627675352d554",
-      "bytes": 451714,
+    "2.14": {
+      "versionCode": 114,
+      "versionName": "2.14",
+      "sha256": "7e2f0a664507a2b106a9acf131b0ab558da6eb3dee5c3d2dce4b3880f9ba7204",
+      "bytes": 459906,
       "same_signer": true,
       "v1_v2_v3_verified": true,
-      "loader_sha256": "0d3f54f156e9fc3b2a9fc8078e866f1260b4a5a148bfbd9438e658e53acaf8e5",
-      "embedded_free_sha256": "5b78facc48f0c88e3e71421616b1650eb4b9449416152617919eef2609122811",
+      "loader_sha256": "9134169a0547fdb48a0e51accd7a3c984372fe6542d604f129aef2b8376cf3aa",
+      "embedded_free_sha256": "10e7df74d4ee19128f2fa7d2f534eff4d8d058fbe71b44abb1f863b974ff9010",
       "phone_tested": false
     }
   }

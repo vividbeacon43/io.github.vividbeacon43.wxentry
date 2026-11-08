@@ -29,7 +29,7 @@ public final class SnsLocalDataTest {
   for(String raw:new String[]{"", "format=2\nlikes=1\ncomments=1\n", "format=1\nlikes=2\ncomments=1\n", "format=1\nlikes=1\ncomments=1\nunknown=x\n", encoded+"post="+KEY+"|3\n", encoded+"like="+KEY+"|"+SnsLocalData.hex("wxid_friend_1")+"|78\n", encoded+"template=78\n", "format=1\nlikes=0\ncomments=0\ntemplate=c080\n"}){
    boolean rejected=false;try{SnsLocalData.decode(raw);}catch(Exception e){rejected=true;}ok(rejected);
   }
-  List<SnsLocalData.Person> many=new ArrayList<>();for(int i=0;i<100;i++)many.add(person(i));ok(empty.likes(KEY,many,0).post(KEY).likes.size()==100);many.add(person(100));bad(()->empty.likes(KEY,many,0));
+  List<SnsLocalData.Person> many=new ArrayList<>();for(int i=0;i<5000;i++)many.add(person(i));SnsLocalData thousands=empty.likes(KEY,many,0);ok(thousands.post(KEY).likes.size()==5000);ok(SnsLocalData.decode(thousands.encode()).post(KEY).likes.size()==5000);ok(thousands.addComments(KEY,Arrays.asList(entry(1,"评论仍保留")),0).post(KEY).likes.size()==5000);
   List<SnsLocalData.Comment> comments=new ArrayList<>();for(int i=0;i<100;i++)comments.add(entry(i,"内容"));ok(empty.addComments(KEY,comments,0).post(KEY).comments.size()==100);comments.add(entry(100,"多一条"));bad(()->empty.addComments(KEY,comments,0));
   List<String> templates=new ArrayList<>();for(int i=0;i<51;i++)templates.add("预设"+i);bad(()->empty.presets(templates));
   SnsLocalData lru=empty;for(int i=1;i<=200;i++)lru=lru.likes("wxid_author~"+Integer.toHexString(i),Arrays.asList(person(1)),i);ok(lru.posts.size()==200);

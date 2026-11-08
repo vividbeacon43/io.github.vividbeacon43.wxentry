@@ -19,13 +19,18 @@ final class SnsLocalPanel {
     static void mount(ViewGroup host,View nativeRoot,View nativeLike,View nativeComments,boolean realLikes,boolean realComments,SnsLocalRuntime.Bound bound,List<SnsLocalData.Person> likes,List<SnsLocalData.Comment> comments)throws Throwable{
         Context context=host.getContext();
         if(nativeRoot!=null&&nativeLike!=null&&nativeComments!=null&&nativeLike.getParent() instanceof ViewGroup&&nativeComments.getParent() instanceof ViewGroup&&vertical((ViewGroup)nativeLike.getParent())&&vertical((ViewGroup)nativeComments.getParent())){
-            if(!likes.isEmpty()){ViewGroup parent=(ViewGroup)nativeLike.getParent();LinearLayout view=likes(context,bound,likes,!realLikes,realComments&&!realLikes);parent.addView(view,parent.indexOfChild(nativeLike)+1,new LinearLayout.LayoutParams(-1,-2));bound.added(view);}
-            if(!comments.isEmpty()){ViewGroup parent=(ViewGroup)nativeComments.getParent();LinearLayout view=comments(context,bound,comments,(realLikes||!likes.isEmpty())&&!realComments);parent.addView(view,parent.indexOfChild(nativeComments)+1,new LinearLayout.LayoutParams(-1,-2));bound.added(view);}
+            if(!likes.isEmpty()){ViewGroup parent=(ViewGroup)nativeLike.getParent();View view=likes(context,bound,likes,realLikes?SnsLocalNative.likesText(nativeLike):null);SnsLocalNative.likeStyle(view,nativeLike);parent.addView(view,parent.indexOfChild(nativeLike)+1,new LinearLayout.LayoutParams(-1,-2));bound.added(view);if(realLikes)bound.hideLike(nativeLike);else if(realComments)separator(parent,parent.indexOfChild(view)+1,bound);}
+            if(!comments.isEmpty()){ViewGroup parent=(ViewGroup)nativeComments.getParent();LinearLayout view=comments(context,bound,comments,false);int at=parent.indexOfChild(nativeComments)+1;if((realLikes||!likes.isEmpty())&&!realComments){separator(parent,at,bound);at++;}parent.addView(view,at,new LinearLayout.LayoutParams(-1,-2));bound.added(view);}
             return;
         }
-        LinearLayout wrapper=new LinearLayout(context);wrapper.setOrientation(LinearLayout.VERTICAL);GradientDrawable background=new GradientDrawable();background.setColor(SettingsUi.dark(context)?0xFF292929:0xFFF7F7F7);background.setCornerRadius(dp(context,3));wrapper.setBackground(background);
-        if(!likes.isEmpty())wrapper.addView(likes(context,bound,likes,!realLikes,!comments.isEmpty()));if(!comments.isEmpty())wrapper.addView(comments(context,bound,comments,false));
-        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);params.topMargin=dp(context,3);params.bottomMargin=dp(context,5);host.addView(wrapper,params);bound.added(wrapper);
+        View wrapper=SnsLocalNative.interaction(context),slot=(View)de.robv.android.xposed.XposedHelpers.callMethod(wrapper,"getLikeLayout");
+        ViewGroup parent=(ViewGroup)slot.getParent();if(!likes.isEmpty()){int at=parent.indexOfChild(slot);ViewGroup.LayoutParams params=slot.getLayoutParams();parent.removeView(slot);View local=likes(context,bound,likes,null);SnsLocalNative.likeStyle(local,slot);parent.addView(local,at,params);}else slot.setVisibility(View.GONE);
+        ViewGroup commentSlot=(ViewGroup)de.robv.android.xposed.XposedHelpers.callMethod(wrapper,"getCommentLayout");commentSlot.setVisibility(comments.isEmpty()?View.GONE:View.VISIBLE);if(!comments.isEmpty())commentSlot.addView(comments(context,bound,comments,false));
+        View divider=(View)de.robv.android.xposed.XposedHelpers.callMethod(wrapper,"getDivider");divider.setVisibility(!likes.isEmpty()&&!comments.isEmpty()?View.VISIBLE:View.GONE);
+        host.addView(wrapper,SnsLocalNative.interactionParams());bound.added(wrapper);
+    }
+    static void separator(ViewGroup parent,int at,SnsLocalRuntime.Bound bound)throws Throwable{
+        View fresh=SnsLocalNative.interaction(parent.getContext());View line=(View)de.robv.android.xposed.XposedHelpers.callMethod(fresh,"getDivider");ViewGroup.LayoutParams params=line.getLayoutParams();((ViewGroup)line.getParent()).removeView(line);line.setVisibility(View.VISIBLE);parent.addView(line,at,params);bound.added(line);
     }
     static ImageView avatar(final Context c,final SnsLocalRuntime.Bound bound,final SnsLocalData.Person person,final SnsLocalData.Feature feature,int size){
         ImageView image=new ImageView(c);image.setScaleType(ImageView.ScaleType.CENTER_CROP);image.setContentDescription(person.name+"的头像");image.setLayoutParams(new LinearLayout.LayoutParams(dp(c,size),dp(c,size)));
@@ -33,14 +38,15 @@ final class SnsLocalPanel {
         image.setOnClickListener(new View.OnClickListener(){public void onClick(View view){open(view,bound,person,feature);}});return image;
     }
     static void open(View view,SnsLocalRuntime.Bound bound,SnsLocalData.Person person,SnsLocalData.Feature feature){if(SnsLocalRuntime.valid(bound,feature))SnsLocalNative.profile(SnsLocalNative.activity(view.getContext()),bound.owner,person.id);}
-    static LinearLayout likes(Context c,final SnsLocalRuntime.Bound bound,List<SnsLocalData.Person> values,boolean heart,boolean divider){
-        LinearLayout outer=new LinearLayout(c);outer.setOrientation(LinearLayout.VERTICAL);outer.setPadding(dp(c,8),dp(c,5),dp(c,8),dp(c,5));
-        LinearLayout row=new LinearLayout(c);row.setGravity(Gravity.TOP);if(heart){TextView icon=SettingsUi.text(c,"♡",17);icon.setTextColor(BLUE);icon.setPadding(0,dp(c,4),dp(c,6),0);row.addView(icon);}
-        Flow flow=new Flow(c);int count=bound.likesExpanded?values.size():Math.min(10,values.size());
-        for(int i=0;i<count;i++){final SnsLocalData.Person person=values.get(i);LinearLayout chip=new LinearLayout(c);chip.setGravity(Gravity.CENTER_VERTICAL);chip.setPadding(0,0,dp(c,7),dp(c,5));chip.addView(avatar(c,bound,person,SnsLocalData.Feature.LIKES,28));TextView name=SettingsUi.text(c,person.name,14);name.setTextColor(BLUE);name.setSingleLine(true);name.setMaxEms(6);name.setEllipsize(TextUtils.TruncateAt.END);name.setPadding(dp(c,4),0,0,0);chip.addView(name);chip.setOnClickListener(new View.OnClickListener(){public void onClick(View v){open(v,bound,person,SnsLocalData.Feature.LIKES);}});flow.addView(chip,new ViewGroup.LayoutParams(-2,-2));}
-        row.addView(flow,new LinearLayout.LayoutParams(0,-2,1));outer.addView(row);
-        if(count<values.size()){TextView more=SettingsUi.text(c,"展开全部（"+values.size()+"）",12);more.setTextColor(BLUE);more.setOnClickListener(new View.OnClickListener(){public void onClick(View view){SnsLocalRuntime.expand(bound,true);}});outer.addView(more);}
-        if(divider)outer.addView(line(c));return outer;
+    static View likes(Context c,final SnsLocalRuntime.Bound bound,List<SnsLocalData.Person> values,CharSequence genuine)throws Throwable{
+        View outer=SnsLocalNative.likesView(c);TextView label=SnsLocalNative.likesLabel(outer);final int color=SnsLocalNative.linkColor(c);
+        SpannableStringBuilder text=new SpannableStringBuilder();boolean hasGenuine=genuine!=null&&genuine.length()>1;
+        if(hasGenuine)text.append(genuine);else{text.append(" ");text.setSpan(SnsLocalNative.heart(c),0,1,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);}
+        int count=Math.min(bound.likesVisible,values.size());
+        for(int i=0;i<count;i++){if(hasGenuine||i>0)text.append(", ");final SnsLocalData.Person person=values.get(i);int start=text.length();text.append(person.name);text.setSpan(new ClickableSpan(){public void onClick(View view){open(view,bound,person,SnsLocalData.Feature.LIKES);}public void updateDrawState(TextPaint paint){paint.setColor(color);paint.setUnderlineText(false);}},start,text.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);}
+        if(count<values.size()){text.append(", … ");int start=text.length();text.append("展开更多（共"+values.size()+"人）");text.setSpan(new ClickableSpan(){public void onClick(View view){if(SnsLocalRuntime.valid(bound,SnsLocalData.Feature.LIKES))SnsLocalRuntime.expand(bound,true);}public void updateDrawState(TextPaint paint){paint.setColor(color);paint.setUnderlineText(false);}},start,text.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);}
+        label.setText(text,TextView.BufferType.SPANNABLE);label.setTextColor(color);label.setHighlightColor(0x22607090);label.setMovementMethod(LinkMovementMethod.getInstance());
+        ((View)de.robv.android.xposed.XposedHelpers.getObjectField(outer,"h")).setVisibility(View.GONE);outer.setVisibility(View.VISIBLE);return outer;
     }
     static LinearLayout comments(Context c,final SnsLocalRuntime.Bound bound,List<SnsLocalData.Comment> values,boolean divider){
         LinearLayout outer=new LinearLayout(c);outer.setOrientation(LinearLayout.VERTICAL);outer.setPadding(dp(c,8),dp(c,3),dp(c,8),dp(c,4));if(divider)outer.addView(line(c));int count=bound.commentsExpanded?values.size():Math.min(5,values.size());
@@ -60,12 +66,5 @@ final class SnsLocalPanel {
             if(longPress&&(event.getActionMasked()==MotionEvent.ACTION_UP||event.getActionMasked()==MotionEvent.ACTION_CANCEL)){setPressed(false);cancelLongPress();if(getText() instanceof Spannable)Selection.removeSelection((Spannable)getText());return true;}
             return super.onTouchEvent(event);
         }
-    }
-    static final class Flow extends ViewGroup {
-        Flow(Context c){super(c);}
-        protected void onMeasure(int widthSpec,int heightSpec){int width=MeasureSpec.getSize(widthSpec);if(width==0)width=getResources().getDisplayMetrics().widthPixels;int x=0,y=0,row=0;
-            for(int i=0;i<getChildCount();i++){View child=getChildAt(i);measureChild(child,MeasureSpec.makeMeasureSpec(width,MeasureSpec.AT_MOST),heightSpec);int w=child.getMeasuredWidth(),h=child.getMeasuredHeight();if(x>0&&x+w>width){y+=row;x=0;row=0;}x+=w;row=Math.max(row,h);}setMeasuredDimension(resolveSize(width,widthSpec),resolveSize(y+row,heightSpec));}
-        protected void onLayout(boolean changed,int left,int top,int right,int bottom){int width=right-left,x=0,y=0,row=0;for(int i=0;i<getChildCount();i++){View child=getChildAt(i);int w=child.getMeasuredWidth(),h=child.getMeasuredHeight();if(x>0&&x+w>width){y+=row;x=0;row=0;}child.layout(x,y,x+w,y+h);x+=w;row=Math.max(row,h);}}
-        protected LayoutParams generateDefaultLayoutParams(){return new LayoutParams(-2,-2);}
     }
 }

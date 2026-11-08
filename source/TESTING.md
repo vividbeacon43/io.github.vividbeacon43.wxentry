@@ -1,4 +1,4 @@
-# v252 验证
+# v254 验证
 
 - PASS 29 voice callback behavior checks
 - PASS 45 voice forwarding behavior checks
@@ -15,8 +15,9 @@
 - PASS 15 signed paid tablet entitlement, downgrade and tampering checks
 - PASS 35 media cache expiry, retention, restore, identity and independent original policy checks
 - PASS 31 native media interception, original mode, queued list/owner and failure behavior checks
-- PASS 48 local Moments codec, immutable edits, identity and bounded retention checks
+- PASS 49 local Moments codec, immutable edits, identity and bounded retention checks
 - PASS 43 local Moments account isolation, paid grants, atomic failure, corrupt recovery and size cleanup checks
+- PASS 67 all-friend and random-count selection, uniqueness, range and non-mutating checks
 - PASS 35 Moments switch/account/entitlement and native ad-page filtering checks
 - PASS 59 SNS draft eligibility, native editor extras, cancellation, account and owned-file behavior checks
 - True
@@ -37,24 +38,22 @@
 - PASS 91 native SNS long-press, source, downloads and composer contracts
 - PASS 6 native Moments merged-page and advertising marker contracts
 - PASS 37 native complete red packet entry, page selector and application route contracts
-- PASS 20 native local Moments post binding, view pooling, avatar and profile contracts
+- PASS 35 native local Moments post binding, view pooling, avatar and profile contracts
 - PASS 168 framework DEX ordering/search/body/immutability checks
 - PASS 81 final DEX enum reflection contracts
 - PASS 6 signed loader upgrade/rollback checks
 - PASS 8 APK manifest protocol and delivery checks
 
-手机：原微信8.0.80（3220）、Android14，现有已验证高级版账号；最终安装APK2.11和动态内核v252，核对设备实际APK及内核缓存字节与签名构建报告一致。
+## 测试机实测
 
-实际完成：
+微信8.0.80（3220）、Android14、高级版，最终APK2.13及v254签名内核均逐字节校验一致。
 
-- 两个新开关默认关闭、右侧小滑块显示正常，独立启停并重启保留。
-- 长按朋友圈文案出现伪集赞、伪评论与既有一键转发，原生文本浮动菜单和列表菜单均可操作。
-- 多选两名好友生成本地点赞，真实头像加载，点击头像打开对应好友资料。
-- 通过菜单保存临时评论预设；批量选择两位好友并逐人选择预设、保存两条评论。
-- 评论头像及姓名点击打开相应好友原生资料页；长按姓名仅编辑，不再同时误开资料。
-- 修改保存单条评论、删除另一条评论，点赞和其余评论保持；重启后剩余记录仍保留。
-- 在已有原生文字、表情、图片评论的朋友圈添加本地点赞和评论，原生评论保留；单条清理后只有本地生成的部分消失。
-- 滚动到其他朋友圈未出现测试记录串位；重新进入仍定位原目标。关闭伪集赞后仅保留伪评论显示。
-- 使用“清空本地互动记录”清理全部测试记录，预设编辑框删除临时预设，两个开关恢复关闭；既有转发和去广告开关保持开启。最终文件和菜单状态由私有验收脚本复核。
+- 浅色和深色模式显示微信原生心形、逗号分隔的可换行好友姓名，点击本地姓名进入正确资料页。
+- 全选、保存、展开完整名单、资料页跳转已操作。早期候选全选40项时暴露系统服务联系人，修正后可选池为30位真实联系人；最终包全选显示30/30。
+- 随机4人保存后显示4位，安装最终包并重启后重新打开仍预选4位。随机输入0时显示1到30的范围错误；取消随机选择后全选30位保持不变。
+- 最终包深色好友选择器、随机人数和清理确认框的操作文字对比度正常。
+- 同一条朋友圈有2条原生真实点赞时，本地追加1位合并展示，原有真实姓名链接仍能打开正确资料页；清除本条本地互动后恢复原有2条真实点赞。
+- 最后通过模块菜单清空全部测试互动，关闭伪集赞、保持伪评论关闭。私有文件精确为空记录格式；原有转发、去广告开关仍开启。
+- 深色模式为本次临时测试，系统恢复原浅色设置。按用户明确要求保留充电亮屏（全局值7），不恢复原0值。
 
-未提交真实点赞、评论、朋友圈或联系人消息，未操作真实收款，也未切换或解绑测试账号；免费/VIP权限、失效授权、账号隔离及异常文件等边界用行为/DEX测试验证，不声称在手机上切换了真实账号或付费等级。未实际验收所有微信版本、全部点赞组合、深色模式、大字体以及最大数量展开。头像和原生资料路由随当前微信版本适配。测试日志、联系人和截图不随源码打包。
+本次未发送真实点赞、评论、朋友圈或好友消息。未重复进行v252已完成的真实图片/表情评论和伪评论编辑全流程；本次对应路径通过自动检查。5000人全选、随机和持久化为自动检查，手机实际好友池为30人。未重新测试真实转账/红包到账或朋友圈发表页准备。

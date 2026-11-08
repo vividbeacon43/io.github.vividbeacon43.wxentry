@@ -23,9 +23,13 @@ final class SnsLocalRuntime {
         final WeakReference<View> item;final String owner,key;
         final List<WeakReference<View>> added=new ArrayList<WeakReference<View>>();
         WeakReference<View> nativeRoot=new WeakReference<View>(null);
-        String signature="";boolean likesExpanded,commentsExpanded;
+        String signature="";int likesVisible=20;boolean commentsExpanded;
+        WeakReference<View> replacedLike=new WeakReference<View>(null);int replacedVisibility;
         Bound(View item,SnsLocalNative.Target target){this.item=new WeakReference<View>(item);owner=target.owner;key=target.key;}
-        void clear(){for(WeakReference<View> ref:added){View view=ref.get();if(view!=null&&OWN_TAG.equals(view.getTag())&&view.getParent() instanceof ViewGroup)((ViewGroup)view.getParent()).removeView(view);}added.clear();signature="";}
+        void restoreLike(){View view=replacedLike.get();if(view!=null)view.setVisibility(replacedVisibility);replacedLike=new WeakReference<View>(null);}
+        void hideLike(View view){replacedLike=new WeakReference<View>(view);replacedVisibility=view.getVisibility();view.setVisibility(View.GONE);}
+        void rehideLike(){View view=replacedLike.get();if(view!=null)view.setVisibility(View.GONE);}
+        void clear(){restoreLike();for(WeakReference<View> ref:added){View view=ref.get();if(view!=null&&OWN_TAG.equals(view.getTag())&&view.getParent() instanceof ViewGroup)((ViewGroup)view.getParent()).removeView(view);}added.clear();signature="";}
         boolean attached(){if(added.isEmpty())return false;for(WeakReference<View> r:added){View v=r.get();if(v==null||v.getParent()==null)return false;}return true;}
         void added(View view){view.setTag(OWN_TAG);added.add(new WeakReference<View>(view));}
     }
@@ -48,7 +52,7 @@ final class SnsLocalRuntime {
             Bound old=states.get(item);if(old==null)return;
             try{Object model=p.args[1]==null?null:XposedHelpers.callMethod(p.args[1],"n");SnsLocalNative.Target target=model==null?null:SnsLocalNative.target(XposedHelpers.callMethod(model,"Y0"));if(target==null||!old.owner.equals(target.owner)||!old.key.equals(target.key)){old.clear();states.remove(item);}}catch(Throwable failure){old.clear();states.remove(item);}
         }});
-        XposedBridge.hookMethod(measure,new XC_MethodHook(){protected void afterHookedMethod(MethodHookParam p){
+        XposedBridge.hookMethod(measure,new XC_MethodHook(){protected void beforeHookedMethod(MethodHookParam p){if(Looper.myLooper()==Looper.getMainLooper()&&p.thisObject instanceof View){Bound old=states.get((View)p.thisObject);if(old!=null)old.restoreLike();}}protected void afterHookedMethod(MethodHookParam p){
             if(!(p.thisObject instanceof View))return;final View item=(View)p.thisObject;
             if(p.hasThrowable()){main.post(new Runnable(){public void run(){Bound old=states.get(item);if(old!=null)old.clear();}});return;}
             if(Looper.myLooper()==Looper.getMainLooper())render(item,false);else main.post(new Runnable(){public void run(){if(render(item,false))item.requestLayout();}});
@@ -98,16 +102,18 @@ final class SnsLocalRuntime {
             if(nativeRoot!=null){nativeLike=(View)XposedHelpers.callMethod(nativeRoot,"getLikeLayout");nativeComments=(View)XposedHelpers.callMethod(nativeRoot,"getCommentLayout");}
             boolean realLikes=nativeLike!=null&&nativeLike.getVisibility()==View.VISIBLE,realComments=nativeComments instanceof ViewGroup&&((ViewGroup)nativeComments).getChildCount()>0;
             Set<String> genuine=realLikes?SnsLocalNative.realLikes(SnsLocalNative.model(item)):Collections.<String>emptySet();
-            List<SnsLocalData.Person> likes=new ArrayList<SnsLocalData.Person>();if(data.likesOn)for(SnsLocalData.Person person:post.likes)if(!genuine.contains(person.id))likes.add(person);
+            List<SnsLocalData.Person> likes=new ArrayList<SnsLocalData.Person>();if(data.likesOn)for(SnsLocalData.Person person:post.likes)if(SnsLocalSelection.selectable(person.id)&&!genuine.contains(person.id))likes.add(person);
             List<SnsLocalData.Comment> comments=data.commentsOn?post.comments:Collections.<SnsLocalData.Comment>emptyList();
-            String signature=SnsLocalStore.revision()+"/"+System.identityHashCode(nativeRoot)+"/"+realLikes+"/"+realComments+"/"+genuine.hashCode()+"/"+bound.likesExpanded+"/"+bound.commentsExpanded;
-            if(!force&&signature.equals(bound.signature)&&bound.attached())return false;
+            if(likes.isEmpty()&&comments.isEmpty()){boolean had=!bound.added.isEmpty();bound.clear();return had;}
+            CharSequence genuineText=realLikes?SnsLocalNative.likesText(nativeLike):null;
+            String signature=SnsLocalStore.revision()+"/"+System.identityHashCode(nativeRoot)+"/"+realLikes+"/"+realComments+"/"+genuine.hashCode()+"/"+(genuineText==null?0:genuineText.toString().hashCode())+"/"+bound.likesVisible+"/"+bound.commentsExpanded;
+            if(!force&&signature.equals(bound.signature)&&bound.attached()){if(realLikes&&!likes.isEmpty())bound.hideLike(nativeLike);return false;}
             bound.clear();bound.nativeRoot=new WeakReference<View>(nativeRoot);
             if(!likes.isEmpty()||!comments.isEmpty())SnsLocalPanel.mount(host,nativeRoot,nativeLike,nativeComments,realLikes,realComments,bound,likes,comments);
             bound.signature=signature;Kernel.T("ARSNSLOCAL rendered likes="+likes.size()+" comments="+comments.size()+" native="+(nativeRoot!=null));watch();return true;
         }catch(Throwable failure){if(bound!=null)bound.clear();log("bind-error",failure);return false;}
     }
-    static void expand(final Bound bound,boolean likes){if(likes)bound.likesExpanded=true;else bound.commentsExpanded=true;View item=bound.item.get();if(item!=null&&render(item,true))item.requestLayout();}
+    static void expand(final Bound bound,boolean likes){if(likes)bound.likesVisible+=100;else bound.commentsExpanded=true;View item=bound.item.get();if(item!=null){bound.restoreLike();if(render(item,true))item.requestLayout();}}
     static void refresh(){for(View item:new ArrayList<View>(states.keySet()))if(item!=null)try{XposedHelpers.callMethod(item,"q");item.requestLayout();}catch(Throwable failure){Bound old=states.get(item);if(old!=null)old.clear();}watch();}
     static void watch(){if(ticking||states.isEmpty())return;ticking=true;main.postDelayed(new Runnable(){public void run(){ticking=false;if(states.isEmpty())return;String now=Kernel.receiptAccount()+"/"+Kernel.momentsPremiumEnabled()+"/"+SnsLocalStore.revision();if(!now.equals(policy)){policy=now;refresh();}watch();}},2000L);}
 }
