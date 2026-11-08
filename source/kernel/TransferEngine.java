@@ -11,10 +11,14 @@ final class TransferEngine {
     static final long TIMEOUT_MS=45000;
     enum Stage { WAITING, QUERY, CONFIRM, VERIFY, DONE }
     static final class Packet {
-        final String account,talker,sender,receiver,transaction,transfer,attach;
+        final String account,talker,sender,receiver,transaction,transfer,attach,memo;
         final int cents,invalid;
         Packet(String a,String t,String s,String r,String tx,String tr,int amount,int expiry,String extra) {
+            this(a,t,s,r,tx,tr,amount,expiry,extra,null);
+        }
+        Packet(String a,String t,String s,String r,String tx,String tr,int amount,int expiry,String extra,String note) {
             account=a;talker=t;sender=s;receiver=r;transaction=tx;transfer=tr;cents=amount;invalid=expiry;attach=extra;
+            memo=note;
         }
         String key() { return account+"|transfer|"+transfer; }
         String group() { return talker.endsWith("@chatroom")?talker:""; }
@@ -130,7 +134,8 @@ final class TransferEngine {
             String currency=child(pay,"fee_type",false);if(!currency.isEmpty()&&!currency.equals("CNY")&&!currency.equals("1"))return null;
             String invalid=child(pay,"invalidtime",false);int expiry=invalid.isEmpty()?0:Integer.parseInt(invalid);if(expiry<0)return null;
             String attach=child(pay,"attach",false);if(attach.length()>8192)return null;
-            return new Packet(account,talker,sender,receiver,transaction,transfer,cents,expiry,attach);
+            String memo=child(pay,"pay_memo",false);if(memo.length()>16384)return null;
+            return new Packet(account,talker,sender,receiver,transaction,transfer,cents,expiry,attach,memo);
         } catch(Throwable invalid) { return null; }
     }
 }

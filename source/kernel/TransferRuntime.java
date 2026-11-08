@@ -38,7 +38,7 @@ final class TransferRuntime implements TransferEngine.Host,TransferNative.Listen
     }
     public long now() { return SystemClock.elapsedRealtime(); }
     public boolean allowed(TransferEngine.Packet p) {
-        try { return Kernel.redPacketPremiumEnabled() && p.account.equals(api.account()) && ReceiptStore.permits(ReceiptConfig.Feature.TRANSFER,p.account,p.talker); }
+        try { return Kernel.redPacketPremiumEnabled() && p.account.equals(api.account()) && ReceiptStore.permitsText(ReceiptConfig.Feature.TRANSFER,p.account,p.talker,p.memo); }
         catch(Throwable failure) { return false; }
     }
     public boolean reserve(String key) { return RedPacketRuntime.reserveKey(key); }

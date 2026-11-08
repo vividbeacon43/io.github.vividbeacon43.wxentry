@@ -71,7 +71,7 @@ final class RedPacketRuntime implements RedPacketEngine.Host,RedPacketNative.Lis
         final RedPacketRuntime runtime=instance;
         if(runtime==null) {
             // Preserve the existing simulation when the native adapter is unsupported.
-            if(!silentSelected() && !Kernel.MODULE_OFF && ReceiptStore.permits(ReceiptConfig.Feature.RED_PACKET,Kernel.receiptAccount(),talker))Kernel.openReceiveUI(url,msgId,talker,content);
+            if(!silentSelected() && !Kernel.MODULE_OFF && ReceiptStore.permitsMessage(ReceiptConfig.Feature.RED_PACKET,Kernel.receiptAccount(),talker,content))Kernel.openReceiveUI(url,msgId,talker,content);
             else Kernel.T("rp: silent request skipped; native adapter unavailable");
             return;
         }
@@ -88,6 +88,9 @@ final class RedPacketRuntime implements RedPacketEngine.Host,RedPacketNative.Lis
                 if(!rules.enabled||!rules.permits(packet.talker)) {
                     ReceiptConfig.Scope scope=ReceiptConfig.Scope.of(packet.talker);
                     Kernel.T("rp: policy skip scope="+scope+" rule="+rules.scope(scope).rule+" enabled="+rules.enabled);return;
+                }
+                if(!ReceiptStore.keywordsPermit(rules,ReceiptStore.keywordsActive(rules)?ReceiptConfig.messageText(ReceiptConfig.Feature.RED_PACKET,packet.content):null)) {
+                    Kernel.T("rp: policy skip reason=keyword scope="+ReceiptConfig.Scope.of(packet.talker));return;
                 }
                 runtime.engine.accept(packet,silentSelected());
             } catch(Throwable failure) { runtime.error(failure); }
@@ -109,8 +112,14 @@ final class RedPacketRuntime implements RedPacketEngine.Host,RedPacketNative.Lis
         final boolean manual=Kernel.freeRedPacketForegroundOnly();
         final boolean owned;synchronized(Kernel.RP_SEEN) { owned=Kernel.RP_SEEN.contains(url); }
         if(!manual&&!owned)return;
-        final String account=Kernel.receiptAccount(),talker=act.getIntent().getStringExtra("key_username");
+        final String account=Kernel.receiptAccount(),talker=uiTalker(act,url,account);
         if(manual && (!ReceiptConfig.validId(account) || !ReceiptStore.permits(ReceiptConfig.Feature.RED_PACKET,account,talker)))return;
+        final String keywordText;
+        try {
+            ReceiptConfig c=ReceiptStore.load(ReceiptConfig.Feature.RED_PACKET,account);
+            keywordText=ReceiptStore.keywordsActive(c)?uiKeywordText(act,url,account,talker):null;
+            if(!ReceiptStore.keywordsPermit(c,keywordText)){Kernel.T("rp ui skipped reason=keyword");return;}
+        }catch(Throwable unavailable){return;}
         Kernel.T("rp ui scheduled manual="+manual+" owned="+owned+" page="+act.getClass().getSimpleName());
         final java.lang.ref.WeakReference<Activity> activity=new java.lang.ref.WeakReference<Activity>(act);
         final Handler main=new Handler(Looper.getMainLooper());
@@ -122,16 +131,47 @@ final class RedPacketRuntime implements RedPacketEngine.Host,RedPacketNative.Lis
             if(current.isFinishing() || current.isDestroyed()) { Kernel.T("rp ui stopped reason=page-closed page="+current.getClass().getSimpleName());return; }
             if(Kernel.MODULE_OFF || silentSelected()) { Kernel.T("rp ui stopped reason=mode-or-module-changed");return; }
             if(manual && (!account.equals(Kernel.receiptAccount()) || !ReceiptStore.permits(ReceiptConfig.Feature.RED_PACKET,account,talker)))return;
+            if(!account.equals(Kernel.receiptAccount()) || !ReceiptStore.permitsText(ReceiptConfig.Feature.RED_PACKET,account,talker,keywordText))return;
             if((manual || legacyClickAllowed(url)) && Kernel.tryClickKai(current))return;
             if(SystemClock.elapsedRealtime()<deadline)main.postDelayed(this,150);
             else Kernel.T("rp ui timeout page="+current.getClass().getSimpleName()+" state="+Kernel.redPacketUiState(current));
         } },delay);
     }
+    static String uiTalker(Activity act,String url,String account) {
+        RedPacketRuntime runtime=instance;
+        if(runtime!=null)synchronized(runtime.engine) {
+            for(RedPacketEngine.Attempt a:runtime.engine.pending.values())
+                if(a.packet.account.equals(account) && a.packet.url.equals(url))return a.packet.talker;
+        }
+        return act.getIntent().getStringExtra("key_username");
+    }
+    static String uiKeywordText(Activity act,String url,String account,String talker) throws Throwable {
+        if(!account.equals(Kernel.receiptAccount()) || !ReceiptConfig.validId(talker))return null;
+        RedPacketRuntime runtime=instance;
+        if(runtime!=null)synchronized(runtime.engine) {
+            for(RedPacketEngine.Attempt a:runtime.engine.pending.values())
+                if(a.packet.account.equals(account) && a.packet.talker.equals(talker) && a.packet.url.equals(url))
+                    return ReceiptConfig.messageText(ReceiptConfig.Feature.RED_PACKET,a.packet.content);
+        }
+        // Manually opened cards still obey the filter. Read only the owned message, never write chat data.
+        long id=act.getIntent().getLongExtra("key_msgid",0);
+        android.database.Cursor cursor=null;
+        try {
+            String sql="select content from message where talker=? and isSend=0"+(id>0?" and msgId=? limit 1":" order by createTime desc limit 64");
+            cursor=Kernel.rawQuery(Kernel.db0(),sql,id>0?new String[]{talker,Long.toString(id)}:new String[]{talker});
+            while(cursor!=null && cursor.moveToNext()) {
+                String content=cursor.getString(0);
+                if(url.equals(RedPacketEngine.messageUrl(49,0L,content)) && account.equals(Kernel.receiptAccount()))
+                    return ReceiptConfig.messageText(ReceiptConfig.Feature.RED_PACKET,content);
+            }
+            return null;
+        }finally{if(cursor!=null)cursor.close();}
+    }
     public long now() { return SystemClock.elapsedRealtime(); }
     public boolean allowed(RedPacketEngine.Packet p) {
         try {
             return !Kernel.MODULE_OFF && p.account.equals(api.account())
-                && ReceiptStore.permits(ReceiptConfig.Feature.RED_PACKET,p.account,p.talker);
+                && ReceiptStore.permitsMessage(ReceiptConfig.Feature.RED_PACKET,p.account,p.talker,p.content);
         } catch(Throwable failure) { return false; }
     }
     public boolean reserve(String key) { return reserveKey(key); }

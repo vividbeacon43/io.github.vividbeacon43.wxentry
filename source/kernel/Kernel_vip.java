@@ -27,7 +27,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "254";
+    static final String BUILD = "256";
     public static final String EDITION = "vip";
     static final boolean RP_PREMIUM_EDITION = true;
     static final boolean TABLET_PREMIUM_EDITION = true;
@@ -2007,7 +2007,7 @@ static boolean wxVersionOk(Object actObj) {
     static void openReceiveUI(final String url, final long msgId, final String talker, final String content) {
         try {
             if (MODULE_OFF || RedPacketRuntime.silentSelected()
-                    || !ReceiptStore.permits(ReceiptConfig.Feature.RED_PACKET, receiptAccount(), talker)) return;
+                    || !ReceiptStore.permitsMessage(ReceiptConfig.Feature.RED_PACKET, receiptAccount(), talker, content)) return;
             final Activity current = currentActivityNow();
             final android.content.Context app = rememberAppContext(current, "receive");
             synchronized (RP_SEEN) {
@@ -6035,7 +6035,7 @@ static boolean wxVersionOk(Object actObj) {
         } catch (Throwable t) {}
     }
 
-    static final String DONATION_URL = "https://www.zidianidc.com/item/3hzecg";
+    static final String DONATION_URL = "https://www.zidianidc.com/shop/Z2EWXNI6";
 
     static void openDonation(final Activity act) {
         if (act == null || act.isFinishing() || act.isDestroyed()) return;
@@ -6049,16 +6049,34 @@ static boolean wxVersionOk(Object actObj) {
             link.setSelector(browser);
             act.startActivity(link);
         } catch (android.content.ActivityNotFoundException missing) {
-            toast(act, "未找到可用浏览器，请先安装或启用浏览器");
+            copyDonationLink(act, "未找到可用浏览器");
         } catch (Throwable failure) {
             T("donation browser open failed " + failure.getClass().getSimpleName());
-            toast(act, "浏览器打开失败，请稍后重试");
+            copyDonationLink(act, "浏览器暂不可用");
+        }
+    }
+
+    static void copyDonationLink(Activity act, String reason) {
+        try {
+            android.content.ClipboardManager clipboard = (android.content.ClipboardManager)
+                    act.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+            if (clipboard == null) throw new IllegalStateException("Clipboard unavailable");
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("打赏链接", DONATION_URL));
+            toast(act, reason + "，打赏链接已复制");
+        } catch (Throwable unavailable) {
+            T("donation copy failed " + unavailable.getClass().getSimpleName());
+            android.widget.TextView text = new android.widget.TextView(act);
+            text.setText(DONATION_URL);text.setTextIsSelectable(true);text.setTextSize(16);
+            int padding = (int)(16 * act.getResources().getDisplayMetrics().density);
+            text.setPadding(padding,padding,padding,padding);
+            new android.app.AlertDialog.Builder(act).setTitle("请长按复制打赏链接").setView(text)
+                    .setPositiveButton("关闭", null).show();
         }
     }
 
     // Each visible row owns its action; positions never determine behavior.
     enum MenuAction {
-        MARK_READ, CLEAR_CHATS, UNFOLLOW_BIZ, RP_GROUPS, RP_TOGGLE, RP_RECEIVE_MODE, RP_SETTINGS, RP_TEMPLATES, RP_HISTORY, RP_DELAY, TRANSFER_TOGGLE, TRANSFER_LISTS, TRANSFER_DELAY, ANTI_TOGGLE,
+        MARK_READ, CLEAR_CHATS, UNFOLLOW_BIZ, RP_GROUPS, RP_TOGGLE, RP_RECEIVE_MODE, RP_SETTINGS, RP_TEMPLATES, RP_HISTORY, RP_DELAY, RP_KEYWORDS, TRANSFER_KEYWORDS, TRANSFER_TOGGLE, TRANSFER_LISTS, TRANSFER_DELAY, ANTI_TOGGLE,
         REALNAME_TOGGLE, ORIGINAL_TOGGLE, NEWROOM_TOGGLE, CHECK_UPDATE, WISH,
         SNS_TOGGLE, RESTART, DIAGNOSTICS, APK_UPDATE, ACTIVATION, DONATE, TABLET_MODE, TABLET_QR, ORIGINAL_DOWNLOAD, ORIGINAL_LISTS, SNS_FORWARD, SNS_AD_BLOCK, SNS_LOCAL_LIKES, SNS_LOCAL_COMMENTS, SNS_LOCAL_PRESETS, SNS_LOCAL_CLEAR
     }
@@ -6112,6 +6130,7 @@ static boolean wxVersionOk(Object actObj) {
                 addMenuAction(rows, MenuAction.RP_RECEIVE_MODE, "");
                 addMenuAction(rows, MenuAction.RP_GROUPS, "红包黑白名单（个人 / 群聊）");
                 addMenuAction(rows, MenuAction.RP_DELAY, "");
+                if(receiptKeywordsEnabled())addMenuAction(rows,MenuAction.RP_KEYWORDS,"");
                 if (redPacketPremiumEnabled()) {
                     addMenuAction(rows, MenuAction.RP_SETTINGS, "领取提示与自动回复（高级版）");
                     addMenuAction(rows, MenuAction.RP_TEMPLATES, "编辑自动回复感言");
@@ -6119,6 +6138,7 @@ static boolean wxVersionOk(Object actObj) {
                     addMenuAction(rows, MenuAction.TRANSFER_TOGGLE, "");
                     addMenuAction(rows, MenuAction.TRANSFER_LISTS, "转账黑白名单（个人 / 群聊）");
                     addMenuAction(rows, MenuAction.TRANSFER_DELAY, "");
+                    if(receiptKeywordsEnabled())addMenuAction(rows,MenuAction.TRANSFER_KEYWORDS,"");
                 }
                 break;
             case MOMENTS:
@@ -6157,6 +6177,8 @@ static boolean wxVersionOk(Object actObj) {
             case RP_TOGGLE: item.label = (freeRedPacketForegroundOnly()?"前台自动拉起并拆包":"自动领取红包"); break;
             case RP_RECEIVE_MODE: item.label = "领取方式：" + (freeRedPacketForegroundOnly()?"前台自动拉起并拆包":RedPacketRuntime.silentSelected() ? "后台静默领取" : "前台自动点领取"); break;
             case RP_DELAY: item.label="红包随机延时"; break;
+            case RP_KEYWORDS:item.label=ReceiptSettings.keywordLabel(ReceiptConfig.Feature.RED_PACKET);break;
+            case TRANSFER_KEYWORDS:item.label=ReceiptSettings.keywordLabel(ReceiptConfig.Feature.TRANSFER);break;
             case TRANSFER_TOGGLE: item.label="自动接收转账（高级版）"; break;
             case TRANSFER_DELAY: item.label="转账随机延时"; break;
             case ANTI_TOGGLE: item.label = "防撤回" + (imageRecallEnabled() ? "（高级版）" : "")
@@ -6179,6 +6201,8 @@ static boolean wxVersionOk(Object actObj) {
             case CLEAR_CHATS: showChatCleaner(act); break;
             case UNFOLLOW_BIZ: showBizPicker(act); break;
             case RP_GROUPS: ReceiptSettings.lists(act,ReceiptConfig.Feature.RED_PACKET); break;
+            case RP_KEYWORDS:ReceiptSettings.keywords(act,ReceiptConfig.Feature.RED_PACKET,refresh);break;
+            case TRANSFER_KEYWORDS:ReceiptSettings.keywords(act,ReceiptConfig.Feature.TRANSFER,refresh);break;
             case RP_TOGGLE: ReceiptSettings.toggle(act,ReceiptConfig.Feature.RED_PACKET,refresh); break;
             case RP_DELAY: ReceiptSettings.delay(act,ReceiptConfig.Feature.RED_PACKET,refresh); break;
             case TRANSFER_TOGGLE: ReceiptSettings.toggle(act,ReceiptConfig.Feature.TRANSFER,refresh); break;
@@ -7060,6 +7084,7 @@ static boolean wxVersionOk(Object actObj) {
         try { return String.valueOf(XposedHelpers.callStaticMethod(XposedHelpers.findClass("w41.z1",APP_CL),"u")); }
         catch(Throwable unavailable) { return ""; }
     }
+    static boolean receiptKeywordsEnabled() { return "vip".equals(EDITION) && redPacketPremiumEnabled(); }
     static boolean redPacketPremiumEnabled() {
         return RP_PREMIUM_EDITION && RedPacketPolicy.premium(EDITION, callMainStr("currentKernelEdition"), MODULE_OFF);
     }

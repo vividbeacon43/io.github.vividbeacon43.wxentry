@@ -180,4 +180,61 @@ final class ReceiptSettings {
         try { ReceiptConfig c=ReceiptStore.current(feature);return c.delayEnabled?ReceiptConfig.seconds(c.minDelayMs)+"～"+ReceiptConfig.seconds(c.maxDelayMs)+" 秒":"关"; }
         catch(Throwable unavailable) { return "未就绪"; }
     }
+    static boolean keywordAccess(Activity act,ReceiptConfig.Feature feature) {
+        if(feature!=ReceiptConfig.Feature.ORIGINAL_IMAGE && Kernel.receiptKeywordsEnabled())return true;
+        RedPacketSettings.toast(act,"关键词过滤仅限 VIP 版");return false;
+    }
+    static String keywordLabel(ReceiptConfig.Feature feature) {
+        try {
+            ReceiptConfig.KeywordRule k=ReceiptStore.current(feature).keywords;
+            return feature.label+"关键词过滤（VIP）："+(k.action==ReceiptConfig.KeywordAction.OFF?"关":k.action==ReceiptConfig.KeywordAction.SKIP?"命中跳过":"仅领命中");
+        }catch(Throwable unavailable){return feature.label+"关键词过滤（VIP）";}
+    }
+    static void keywords(final Activity act,final ReceiptConfig.Feature feature,final Runnable refresh) {
+        if(!keywordAccess(act,feature))return;
+        try {
+            final String account=ReceiptStore.account();ReceiptConfig initial=ReceiptStore.load(feature,account);
+            final ReceiptConfig.KeywordAction[] action={initial.keywords.action};
+            LinearLayout box=SettingsUi.column(act);
+            box.addView(SettingsUi.text(act,"独立于黑白名单，需同时符合两类规则。红包只匹配祝福语，转账只匹配备注；不匹配昵称、金额或会话内容。两项互斥，全部关闭则不限制关键词。",12));
+            final LinearLayout switches=new LinearLayout(act);switches.setOrientation(LinearLayout.VERTICAL);box.addView(switches);
+            final Runnable[] render={null};
+            render[0]=new Runnable(){public void run(){
+                switches.removeAllViews();
+                for(final ReceiptConfig.KeywordAction selected:new ReceiptConfig.KeywordAction[]{ReceiptConfig.KeywordAction.SKIP,ReceiptConfig.KeywordAction.ONLY})
+                    switches.addView(SettingsUi.toggle(act,selected==ReceiptConfig.KeywordAction.SKIP?"命中关键词就跳过":"仅领取命中关键词的","",action[0]==selected,new SettingsUi.Change(){public boolean set(boolean on){
+                        if(on)action[0]=selected;else if(action[0]==selected)action[0]=ReceiptConfig.KeywordAction.OFF;
+                        render[0].run();return action[0]==selected;
+                    }}));
+            }};render[0].run();
+            SettingsUi.heading(box,"匹配方式（二选一）");
+            final RadioGroup modes=new RadioGroup(act);
+            for(int i=0;i<2;i++) {
+                RadioButton row=new RadioButton(act);row.setId(0x75260001+i);row.setText(i==0?"模糊：包含任意一个关键词":"精确：整段文字等于任意一个关键词");row.setTextSize(14);row.setTextColor(SettingsUi.textColor(act));modes.addView(row);
+            }
+            modes.check(0x75260001+(initial.keywords.match==ReceiptConfig.KeywordMatch.EXACT?1:0));box.addView(modes);
+            box.addView(SettingsUi.text(act,"每行一个关键词，多个词任意一个命中即生效；忽略首尾空格，区分英文大小写。最多100个词，每词200字。保存后生效，取消不修改。开启后无法读取祝福语／备注时暂停自动领取，可手动操作。",12));
+            final EditText words=new EditText(act);words.setSingleLine(false);words.setMinLines(3);words.setMaxLines(6);words.setGravity(android.view.Gravity.TOP);
+            words.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+            words.setTextColor(SettingsUi.textColor(act));words.setHintTextColor(SettingsUi.dark(act)?0xFFB7BEC8:0xFF687180);
+            words.setHint("每行一个关键词");words.setText(initial.keywords.text());box.addView(words);
+            ScrollView scroll=new ScrollView(act);scroll.setFillViewport(false);scroll.addView(box);
+            final AlertDialog dialog=new AlertDialog.Builder(act).setTitle(feature.label+"关键词过滤（VIP）").setView(scroll).setNegativeButton("取消",null).setPositiveButton("保存",null).create();
+            dialog.setOnShowListener(new DialogInterface.OnShowListener(){public void onShow(DialogInterface ignored){
+                int color=SettingsUi.dark(act)?0xFFB9C9E6:SettingsUi.BLUE;
+                dialog.getButton(DialogInterface.BUTTON_POSITIVE).setTextColor(color);dialog.getButton(DialogInterface.BUTTON_NEGATIVE).setTextColor(color);
+                dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                    if(!sameAccount(act,account) || !keywordAccess(act,feature))return;
+                    try {
+                        ReceiptConfig c=ReceiptStore.load(feature,account);c.keywords.action=action[0];
+                        c.keywords.match=modes.getCheckedRadioButtonId()==0x75260002?ReceiptConfig.KeywordMatch.EXACT:ReceiptConfig.KeywordMatch.FUZZY;
+                        c.keywords.setWords(words.getText().toString());c.keywords.validate();
+                        if(!ReceiptStore.save(feature,account,c))throw new IllegalStateException();
+                        dialog.dismiss();if(refresh!=null)refresh.run();RedPacketSettings.toast(act,"关键词过滤已保存");
+                    }catch(IllegalArgumentException invalid){words.setError(invalid.getMessage());}
+                    catch(Throwable failure){RedPacketSettings.toast(act,"关键词设置保存失败，保持原状态");}
+                }});
+            }});dialog.show();
+        }catch(Throwable unavailable){RedPacketSettings.toast(act,"关键词设置暂时无法读取");}
+    }
 }

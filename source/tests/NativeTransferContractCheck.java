@@ -24,7 +24,7 @@ public class NativeTransferContractCheck extends NativeRedPacketContractCheck {
   for(Instruction ins:skinOpen.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction){Reference r=((ReferenceInstruction)ins).getReference();if(r instanceof MethodReference){MethodReference m=(MethodReference)r;if(m.getDefiningClass().equals(type("com.tencent.mm.plugin.luckymoney.model.h6"))&&m.getName().equals("<init>"))nativeSkinOpen=true;}}
   if(!nativeSkinOpen)throw new AssertionError("Native skin receive no longer uses standard open scene");checks++;
   Set<String> xmlKeys=new HashSet<>();for(Method m:classes.get(type("xx0.r")).getMethods())if(m.getImplementation()!=null)for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction){Reference r=((ReferenceInstruction)ins).getReference();if(r instanceof StringReference)xmlKeys.add(((StringReference)r).getString());}
-  for(String key:new String[]{"paysubtype","transcationid","transferid","total_fee","fee_type","payer_username","receiver_username"}){boolean found=false;for(String value:xmlKeys)if(value.endsWith(".wcpayinfo."+key))found=true;if(!found)throw new AssertionError("Native transfer XML field changed "+key);checks++;}
+  for(String key:new String[]{"paysubtype","transcationid","transferid","total_fee","fee_type","payer_username","receiver_username","sendertitle","pay_memo"}){boolean found=false;for(String value:xmlKeys)if(value.endsWith(".wcpayinfo."+key))found=true;if(!found)throw new AssertionError("Native receipt XML field changed "+key);checks++;}
   System.out.println("PASS "+checks+" native transfer and manual red packet UI contracts");
  }
 }

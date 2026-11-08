@@ -12,6 +12,7 @@ final class Kernel {
     static android.database.Cursor cursor;
     static android.database.Cursor rawQuery(Object db,String sql,String[] args) { return cursor; }
     static boolean redPacketPremiumEnabled() { return RedPacketPolicy.premium(edition,authorized,MODULE_OFF); }
+    static boolean receiptKeywordsEnabled() { return "vip".equals(edition) && redPacketPremiumEnabled(); }
     static java.util.HashSet<String> RP_SEEN=new java.util.HashSet<String>();
     static java.util.List<String> logs=new java.util.ArrayList<String>();
     static void T(String value) { logs.add(value); }

@@ -59,4 +59,16 @@ final class ReceiptStore {
         catch(Throwable unavailable) { return false; }
     }
     static long delay(ReceiptConfig.Feature feature,String account) { return load(feature,account).delay(RANDOM); }
+    static boolean permitsText(ReceiptConfig.Feature feature,String account,String talker,String text) {
+        try { ReceiptConfig c=load(feature,account);return c.enabled && c.permits(talker) && keywordsPermit(c,text); }
+        catch(Throwable unavailable) { return false; }
+    }
+    static boolean permitsMessage(ReceiptConfig.Feature feature,String account,String talker,String content) {
+        try {
+            ReceiptConfig c=load(feature,account);
+            return c.enabled && c.permits(talker) && keywordsPermit(c,keywordsActive(c)?ReceiptConfig.messageText(feature,content):null);
+        }catch(Throwable unavailable){return false;}
+    }
+    static boolean keywordsActive(ReceiptConfig c) { return Kernel.receiptKeywordsEnabled() && c.keywords.action!=ReceiptConfig.KeywordAction.OFF; }
+    static boolean keywordsPermit(ReceiptConfig c,String text) { return !keywordsActive(c) || c.keywords.permits(text); }
 }
