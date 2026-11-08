@@ -27,7 +27,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "244";
+    static final String BUILD = "246";
     public static final String EDITION = "vip";
     static final boolean RP_PREMIUM_EDITION = true;
     static final boolean TABLET_PREMIUM_EDITION = true;
@@ -494,6 +494,7 @@ static boolean wxVersionOk(Object actObj) {
         try { hookAutoDownload(cl); } catch (Throwable t) { T("autodl hook err " + t); }
         try { ImageRecallRuntime.start(cl); } catch (Throwable t) { T("ARIMG install-error " + t.getClass().getSimpleName()); }
         try { SnsForwardRuntime.start(cl); } catch (Throwable t) { T("ARSNSFORWARD install-error " + t.getClass().getSimpleName()); }
+        try { SnsAdRuntime.start(cl); } catch (Throwable t) { T("ARSNSADS install-error " + t.getClass().getSimpleName()); }
         try { hookImgProbe(cl); } catch (Throwable t) { T("imgprobe hook err " + t); }
         try { hookD3(cl); } catch (Throwable t) { T("d3 probe hook err " + t); }
         try { hookCfgForce(cl); } catch (Throwable t) { T("cfg hook err " + t); }
@@ -6035,10 +6036,10 @@ static boolean wxVersionOk(Object actObj) {
     enum MenuAction {
         MARK_READ, CLEAR_CHATS, UNFOLLOW_BIZ, RP_GROUPS, RP_TOGGLE, RP_RECEIVE_MODE, RP_SETTINGS, RP_TEMPLATES, RP_HISTORY, RP_DELAY, TRANSFER_TOGGLE, TRANSFER_LISTS, TRANSFER_DELAY, ANTI_TOGGLE,
         REALNAME_TOGGLE, ORIGINAL_TOGGLE, NEWROOM_TOGGLE, CHECK_UPDATE, WISH,
-        SNS_TOGGLE, RESTART, DIAGNOSTICS, APK_UPDATE, ACTIVATION, DONATE, TABLET_MODE, TABLET_QR, ORIGINAL_DOWNLOAD, ORIGINAL_LISTS
+        SNS_TOGGLE, RESTART, DIAGNOSTICS, APK_UPDATE, ACTIVATION, DONATE, TABLET_MODE, TABLET_QR, ORIGINAL_DOWNLOAD, ORIGINAL_LISTS, SNS_FORWARD, SNS_AD_BLOCK
     }
     enum MenuCategory {
-        CHAT("聊天"), RED_PACKET("红包"), ANTI_RECALL("防撤回"), SUPPORT("设置与支持"), EXPERIMENTAL("实验功能");
+        CHAT("聊天"), RED_PACKET("红包"), MOMENTS("朋友圈"), ANTI_RECALL("防撤回"), SUPPORT("设置与支持"), EXPERIMENTAL("实验功能");
         final String label;
         MenuCategory(String value) { label = value; }
     }
@@ -6065,6 +6066,7 @@ static boolean wxVersionOk(Object actObj) {
         if (category == null) {
             for (MenuCategory page : MenuCategory.values()) {
                 if(page==MenuCategory.EXPERIMENTAL&&!tabletFeatureAvailable())continue;
+                if(page==MenuCategory.MOMENTS&&!momentsPremiumEnabled())continue;
                 rows.add(new MenuEntry(null, page, menuCategoryTitle(page) + "  ›"));
             }
             addMenuAction(rows, MenuAction.DONATE, "打赏");
@@ -6095,6 +6097,9 @@ static boolean wxVersionOk(Object actObj) {
                     addMenuAction(rows, MenuAction.TRANSFER_DELAY, "");
                 }
                 break;
+            case MOMENTS:
+                if(momentsPremiumEnabled()){addMenuAction(rows,MenuAction.SNS_FORWARD,"");addMenuAction(rows,MenuAction.SNS_AD_BLOCK,"");}
+                break;
             case ANTI_RECALL:
                 addMenuAction(rows, MenuAction.ANTI_TOGGLE, "");
                 addMenuAction(rows, MenuAction.SNS_TOGGLE, "");
@@ -6119,9 +6124,9 @@ static boolean wxVersionOk(Object actObj) {
         }
         return rows;
     }
-    static int menuPageHeight(Activity act, int rows) {
+    static int menuPageHeight(Activity act, int rows, MenuCategory category) {
         android.util.DisplayMetrics metrics = act.getResources().getDisplayMetrics();
-        return Math.min((int)(rows * 52 * metrics.density), (int)(metrics.heightPixels * 0.55f));
+        return Math.min((int)(rows * (category==MenuCategory.MOMENTS?72:56) * metrics.density), (int)(metrics.heightPixels * 0.55f));
     }
     static void refreshMenuLabel(MenuEntry item) {
         switch (item.action) {
@@ -6137,6 +6142,8 @@ static boolean wxVersionOk(Object actObj) {
             case ORIGINAL_DOWNLOAD: item.label = "自动下载原图"; break;
             case NEWROOM_TOGGLE: item.label = "新群免打扰"; break;
             case SNS_TOGGLE: item.label = "朋友圈防撤回"; break;
+            case SNS_FORWARD: item.label="朋友圈一键转发";break;
+            case SNS_AD_BLOCK: item.label="朋友圈去广告";break;
             default: break;
         }
     }
@@ -6174,6 +6181,8 @@ static boolean wxVersionOk(Object actObj) {
             case ORIGINAL_LISTS: ReceiptSettings.lists(act,ReceiptConfig.Feature.ORIGINAL_IMAGE); break;
             case NEWROOM_TOGGLE: toggleFlag(NEWROOM_ON_PATH, "新群免打扰"); break;
             case SNS_TOGGLE: toggleFlag(WXDIR + "sns.keep.del.on", "朋友圈防撤回"); break;
+            case SNS_FORWARD:setMomentsToggle(act,MomentsConfig.Feature.FORWARD,!MomentsSettings.configured(MomentsConfig.Feature.FORWARD));break;
+            case SNS_AD_BLOCK:setMomentsToggle(act,MomentsConfig.Feature.AD_BLOCK,!MomentsSettings.configured(MomentsConfig.Feature.AD_BLOCK));break;
             case CHECK_UPDATE:
                 checkKernelUpdate(act);
                 refreshVerLine(act, tVer);
@@ -6215,6 +6224,8 @@ static boolean wxVersionOk(Object actObj) {
             case ORIGINAL_DOWNLOAD:return ReceiptSettings.enabled(ReceiptConfig.Feature.ORIGINAL_IMAGE);
             case NEWROOM_TOGGLE:return f(NEWROOM_ON_PATH);
             case SNS_TOGGLE:return f(WXDIR+"sns.keep.del.on");
+            case SNS_FORWARD:return snsForwardEnabled();
+            case SNS_AD_BLOCK:return snsAdBlockEnabled();
             case TABLET_MODE:return "1".equals(callMainStr("tabletModeConfigured"));
             default:return null;
         }
@@ -6227,6 +6238,8 @@ static boolean wxVersionOk(Object actObj) {
                 return Boolean.TRUE.equals(main.getMethod("setTabletMode",android.app.Activity.class,boolean.class).invoke(null,act,on));
             }catch(Throwable missing){toast(act,"请先更新模块 APK 至 1.97，再使用平板模式");return false;}
         }
+        if(row.action==MenuAction.SNS_FORWARD)return setMomentsToggle(act,MomentsConfig.Feature.FORWARD,on);
+        if(row.action==MenuAction.SNS_AD_BLOCK)return setMomentsToggle(act,MomentsConfig.Feature.AD_BLOCK,on);
         if(row.action==MenuAction.RP_DELAY)return ReceiptSettings.setDelayEnabled(act,ReceiptConfig.Feature.RED_PACKET,on,null);
         if(row.action==MenuAction.TRANSFER_DELAY)return ReceiptSettings.setDelayEnabled(act,ReceiptConfig.Feature.TRANSFER,on,null);
         if(menuToggleValue(row)!=null && menuToggleValue(row).booleanValue()!=on)performMenuAction(act,row,version,null);
@@ -6293,7 +6306,7 @@ static boolean wxVersionOk(Object actObj) {
                             final MenuEntry entry=getItem(position);refreshMenuLabelSafe(entry);
                             Boolean checked=menuToggleValue(entry);
                             if(checked!=null) {
-                                String detail=entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TRANSFER_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.TRANSFER):entry.action==MenuAction.TABLET_MODE?"开启或关闭后需重启微信，登录页生效":entry.action==MenuAction.ORIGINAL_DOWNLOAD?"收到或打开图片时按名单下载可用原图，独立于防撤回":"";
+                                String detail=entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TRANSFER_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.TRANSFER):entry.action==MenuAction.TABLET_MODE?"开启或关闭后需重启微信，登录页生效":entry.action==MenuAction.SNS_FORWARD?"长按目标进入发表页，需手动发表":entry.action==MenuAction.SNS_AD_BLOCK?"过滤微信广告，刷新朋友圈生效":entry.action==MenuAction.ORIGINAL_DOWNLOAD?"收到或打开图片时按名单下载可用原图，独立于防撤回":"";
                                 SettingsUi.ToggleRow row=SettingsUi.toggle(act,entry.label,detail,checked.booleanValue(),new SettingsUi.Change() {
                                     public boolean set(boolean on) { boolean saved=setMenuToggle(act,entry,on,tVer,renderMenu[0]);notifyDataSetChanged();return saved; }
                                 });
@@ -6328,7 +6341,7 @@ static boolean wxVersionOk(Object actObj) {
             android.widget.LinearLayout box = new android.widget.LinearLayout(act);
             box.setOrientation(android.widget.LinearLayout.VERTICAL);
             box.addView(lv, new android.view.ViewGroup.LayoutParams(
-                    -1, menuPageHeight(act, items.size())));
+                    -1, menuPageHeight(act, items.size(), page[0])));
 
             final android.app.AlertDialog dlg = builder.setView(box)
                     .setNegativeButton("\u5173\u95ed", null).create();
@@ -6340,7 +6353,7 @@ static boolean wxVersionOk(Object actObj) {
                     if (!customTitleUsed) dlg.setTitle(page[0] == null ? "模块设置" : menuCategoryTitle(page[0]));
                     listAd.notifyDataSetChanged();
                     android.view.ViewGroup.LayoutParams params = lv.getLayoutParams();
-                    params.height = menuPageHeight(act, items.size());
+                    params.height = menuPageHeight(act, items.size(), page[0]);
                     lv.setLayoutParams(params);
                     lv.setSelection(0);
                     android.widget.Button back = dlg.getButton(android.content.DialogInterface.BUTTON_NEGATIVE);
@@ -7016,7 +7029,15 @@ static boolean wxVersionOk(Object actObj) {
     static boolean redPacketPremiumEnabled() {
         return RP_PREMIUM_EDITION && RedPacketPolicy.premium(EDITION, callMainStr("currentKernelEdition"), MODULE_OFF);
     }
-    static boolean snsForwardEnabled() {return !MODULE_OFF && ("plus".equals(EDITION)||"vip".equals(EDITION)) && "1".equals(callMainStr2("imageFeatureEnabledFor", EDITION));}
+    static boolean momentsPremiumEnabled() {return !MODULE_OFF && ("plus".equals(EDITION)||"vip".equals(EDITION)) && "1".equals(callMainStr2("imageFeatureEnabledFor", EDITION));}
+    static boolean snsForwardEnabled() {return momentsPremiumEnabled()&&MomentsSettings.configured(MomentsConfig.Feature.FORWARD);}
+    static boolean snsAdBlockEnabled() {return momentsPremiumEnabled()&&MomentsSettings.configured(MomentsConfig.Feature.AD_BLOCK);}
+    static boolean setMomentsToggle(Activity act,MomentsConfig.Feature feature,boolean on){
+        if(!momentsPremiumEnabled()){toast(act,"朋友圈增强功能仅限高级版和 VIP 版");return false;}
+        if(!MomentsSettings.set(feature,on)){toast(act,"朋友圈设置保存失败，请稍后重试");return momentsPremiumEnabled()&&MomentsSettings.configured(feature);}
+        if(feature==MomentsConfig.Feature.AD_BLOCK)toast(act,(on?"去广告已开启":"去广告已关闭")+"，刷新或重新进入朋友圈生效");
+        return on;
+    }
     static boolean imageRecallEnabled() {
         return !MODULE_OFF && !f(AR_OFF_PATH) && "1".equals(callMainStr2("imageFeatureEnabledFor", EDITION));
     }

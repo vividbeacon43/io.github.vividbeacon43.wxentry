@@ -1,0 +1,1 @@
+package cl4;public class p {public final int flags;public boolean fail;public p(int flags){this.flags=flags;}public boolean isAd(){if(fail)throw new IllegalStateException("unavailable");return (flags&32)!=0;}}

@@ -59,11 +59,12 @@ final class SnsForwardRuntime {
         }});
         XposedBridge.hookAllMethods(Activity.class,"onPause",new XC_MethodHook(){protected void beforeHookedMethod(MethodHookParam p){Job job=active;if(job!=null&&job.activity==p.thisObject&&!job.handoff.opened){job.cancel();finish(job,null);}}});
         final Runnable sweep=new Runnable(){public void run(){if(Kernel.APP_CTX==null){main.postDelayed(this,2000L);return;}final File cache=new File(Kernel.APP_CTX.getCacheDir(),"wxentry-sns-forward-v1");io.execute(new Runnable(){public void run(){try{SnsForwardFiles.cleanup(cache,System.currentTimeMillis());}catch(Throwable failure){error("expiry-cleanup",failure);}}});main.postDelayed(this,1800000L);}};
+        MomentsSettings.forwardChanged=new Runnable(){public void run(){if(Kernel.snsForwardEnabled())return;final Job job=active;if(job!=null){job.cancel();main.post(new Runnable(){public void run(){finish(job,null);}});}}};
         sweep.run();ready=true;Kernel.T("ARSNSFORWARD ready premium=true editorOnly=true menus=classic+improved");
     }
     static void open(Binding binding){
         Activity act=binding.activity.get();if(act==null||act.isFinishing()||act.isDestroyed())return;
-        if(!Kernel.snsForwardEnabled()){notice(act,"一键转发朋友圈仅限高级版和 VIP 版");return;}
+        if(!Kernel.snsForwardEnabled()){notice(act,Kernel.momentsPremiumEnabled()?"一键转发已关闭，请在朋友圈菜单开启":"一键转发朋友圈仅限高级版和 VIP 版");return;}
         if(!binding.source.owner.equals(Kernel.receiptAccount())||SystemClock.elapsedRealtime()-binding.at>120000L){notice(act,"菜单已失效，请重新长按目标朋友圈");return;}
         if(binding.source.kind==null){notice(act,"此类朋友圈暂不支持一键转发，请使用微信原生分享");return;}
         if(active!=null){notice(act,"正在准备另一条朋友圈，请先完成或取消");return;}

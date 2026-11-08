@@ -1,4 +1,4 @@
-# v244 验证
+# v246 验证
 
 - PASS 29 voice callback behavior checks
 - PASS 45 voice forwarding behavior checks
@@ -15,6 +15,7 @@
 - PASS 15 signed paid tablet entitlement, downgrade and tampering checks
 - PASS 35 media cache expiry, retention, restore, identity and independent original policy checks
 - PASS 31 native media interception, original mode, queued list/owner and failure behavior checks
+- PASS 35 Moments switch/account/entitlement and native ad-page filtering checks
 - PASS 59 SNS draft eligibility, native editor extras, cancellation, account and owned-file behavior checks
 - True
 - PASS 89 premium entitlement and exclusive mode checks
@@ -30,10 +31,12 @@
 - PASS 23 native tablet/login/QR contracts
 - PASS 57 native video/file revoke, download, path and original image contracts
 - PASS 91 native SNS long-press, source, downloads and composer contracts
+- PASS 6 native Moments merged-page and advertising marker contracts
 - PASS 168 framework DEX ordering/search/body/immutability checks
 - PASS 81 final DEX enum reflection contracts
 - PASS 6 signed loader upgrade/rollback checks
+- PASS 8 APK manifest protocol and delivery checks (release and rollback)
 
 本次以自动化行为测试及原微信 APK 接口检查验证朋友圈长按、原生完整素材下载、仅打开发表页、双红包页面支持及既有媒体规则。具体手机验证项目见 validation.json，不把静态检查计作完整手机验收。
 
-手机验证摘要见 validation.json。现场截图、二维码标识和密钥不分发。已在授权测试机验证多图、视频号、短视频及原图下载。仅自己可见的测试朋友圈已删除；未主动收取真实资金，未覆盖所有系统组合。
+手机验证摘要见 validation.json。现场截图、二维码标识和密钥不分发。本次在授权测试机验证朋友圈菜单、转发开关与广告过滤；具体项目见手机验证记录。未发表测试朋友圈，测试草稿已丢弃，未覆盖所有系统组合。
