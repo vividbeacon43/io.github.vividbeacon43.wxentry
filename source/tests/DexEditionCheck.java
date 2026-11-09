@@ -41,7 +41,7 @@ public final class DexEditionCheck {
         Map<String,String> values=new HashMap<>();
         for(Field f:kernel.getStaticFields())if(f.getInitialValue() instanceof StringEncodedValue)
             values.put(f.getName(),((StringEncodedValue)f.getInitialValue()).getValue());
-        if(!args[1].equals(values.get("EDITION"))||!"256".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
+        if(!args[1].equals(values.get("EDITION"))||!"258".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
         for(String name:new String[]{"RedPacketUi","RedPacketUiNative","RedPacketPolicy","RedPacketEngine","RedPacketNative","RedPacketRuntime","RedPacketSettings"})
             if(!red.contains(root+name+";"))throw new AssertionError("Red packet runtime missing: "+name);
         boolean contextAtBoot=false, nativeUiDelegate=false, fullNativeEntry=false;
@@ -75,6 +75,7 @@ public final class DexEditionCheck {
                 if(ref instanceof StringReference && ((StringReference)ref).getString().equals("Zb"))throw new AssertionError("Annotation allocates a new native message");
             }
         boolean premium=args[1].equals("plus")||args[1].equals("vip");
+        for(String name:new String[]{"SnsScheduleData","SnsScheduleEngine","SnsScheduleStore","SnsScheduleMedia","SnsScheduleNative","SnsScheduleRuntime","SnsScheduleUi","SnsScheduleWake"})if(receiptClasses.contains(root+name+";")!=args[1].equals("vip"))throw new AssertionError("Scheduler VIP boundary failed: "+name);
         for(String name:new String[]{"SnsLocalRuntime","SnsLocalNative","SnsLocalPicker","SnsLocalPanel"})if(receiptClasses.contains(root+name+";")!=premium)throw new AssertionError("Local Moments paid boundary failed: "+name);
         for(String name:new String[]{"SnsLocalData","SnsLocalStore","SnsLocalSettings"})if(!receiptClasses.contains(root+name+";"))throw new AssertionError("Local Moments settings missing");
         boolean localStart=false;

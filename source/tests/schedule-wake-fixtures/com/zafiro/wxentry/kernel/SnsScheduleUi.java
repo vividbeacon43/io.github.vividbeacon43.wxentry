@@ -1,0 +1,1 @@
+package com.zafiro.wxentry.kernel;import android.app.Activity;final class SnsScheduleUi {static java.util.Set<String> editing(){return java.util.Collections.<String>emptySet();}static void toast(Activity a,String s){}}

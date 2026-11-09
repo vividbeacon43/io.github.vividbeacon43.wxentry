@@ -27,7 +27,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "256";
+    static final String BUILD = "258";
     public static final String EDITION = "vip";
     static final boolean RP_PREMIUM_EDITION = true;
     static final boolean TABLET_PREMIUM_EDITION = true;
@@ -496,6 +496,7 @@ static boolean wxVersionOk(Object actObj) {
         try { ImageRecallRuntime.start(cl); } catch (Throwable t) { T("ARIMG install-error " + t.getClass().getSimpleName()); }
         try { SnsForwardRuntime.start(cl); } catch (Throwable t) { T("ARSNSFORWARD install-error " + t.getClass().getSimpleName()); }
         try { SnsAdRuntime.start(cl); } catch (Throwable t) { T("ARSNSADS install-error " + t.getClass().getSimpleName()); }
+        try { SnsScheduleRuntime.start(cl); } catch (Throwable t) { T("ARSNSSCHEDULE install-error " + t.getClass().getSimpleName()); }
         try { SnsLocalRuntime.start(cl); } catch (Throwable t) { T("ARSNSLOCAL install-error " + t.getClass().getSimpleName()); }
         try { hookImgProbe(cl); } catch (Throwable t) { T("imgprobe hook err " + t); }
         try { hookD3(cl); } catch (Throwable t) { T("d3 probe hook err " + t); }
@@ -6078,7 +6079,7 @@ static boolean wxVersionOk(Object actObj) {
     enum MenuAction {
         MARK_READ, CLEAR_CHATS, UNFOLLOW_BIZ, RP_GROUPS, RP_TOGGLE, RP_RECEIVE_MODE, RP_SETTINGS, RP_TEMPLATES, RP_HISTORY, RP_DELAY, RP_KEYWORDS, TRANSFER_KEYWORDS, TRANSFER_TOGGLE, TRANSFER_LISTS, TRANSFER_DELAY, ANTI_TOGGLE,
         REALNAME_TOGGLE, ORIGINAL_TOGGLE, NEWROOM_TOGGLE, CHECK_UPDATE, WISH,
-        SNS_TOGGLE, RESTART, DIAGNOSTICS, APK_UPDATE, ACTIVATION, DONATE, TABLET_MODE, TABLET_QR, ORIGINAL_DOWNLOAD, ORIGINAL_LISTS, SNS_FORWARD, SNS_AD_BLOCK, SNS_LOCAL_LIKES, SNS_LOCAL_COMMENTS, SNS_LOCAL_PRESETS, SNS_LOCAL_CLEAR
+        SNS_TOGGLE, RESTART, DIAGNOSTICS, APK_UPDATE, ACTIVATION, DONATE, TABLET_MODE, TABLET_QR, ORIGINAL_DOWNLOAD, ORIGINAL_LISTS, SNS_FORWARD, SNS_AD_BLOCK, SNS_LOCAL_LIKES, SNS_LOCAL_COMMENTS, SNS_LOCAL_PRESETS, SNS_LOCAL_CLEAR, SNS_SCHEDULE
     }
     enum MenuCategory {
         CHAT("聊天"), RED_PACKET("红包"), MOMENTS("朋友圈"), ANTI_RECALL("防撤回"), SUPPORT("设置与支持"), EXPERIMENTAL("实验功能");
@@ -6142,6 +6143,7 @@ static boolean wxVersionOk(Object actObj) {
                 }
                 break;
             case MOMENTS:
+                if("vip".equals(EDITION))addMenuAction(rows,MenuAction.SNS_SCHEDULE,"定时发朋友圈（VIP）");
                 if(momentsPremiumEnabled()){addMenuAction(rows,MenuAction.SNS_FORWARD,"");addMenuAction(rows,MenuAction.SNS_AD_BLOCK,"");addMenuAction(rows,MenuAction.SNS_LOCAL_LIKES,"");addMenuAction(rows,MenuAction.SNS_LOCAL_COMMENTS,"");addMenuAction(rows,MenuAction.SNS_LOCAL_PRESETS,"伪评论内容预设");addMenuAction(rows,MenuAction.SNS_LOCAL_CLEAR,"清空本地互动记录");}
                 break;
             case ANTI_RECALL:
@@ -6237,6 +6239,7 @@ static boolean wxVersionOk(Object actObj) {
             case SNS_LOCAL_COMMENTS:SnsLocalSettings.toggle(act,SnsLocalData.Feature.COMMENTS,!SnsLocalStore.enabled(SnsLocalData.Feature.COMMENTS));break;
             case SNS_LOCAL_PRESETS:SnsLocalSettings.presets(act);break;
             case SNS_LOCAL_CLEAR:SnsLocalSettings.clear(act);break;
+            case SNS_SCHEDULE:SnsScheduleUi.show(act);break;
             case CHECK_UPDATE:
                 checkKernelUpdate(act);
                 refreshVerLine(act, tVer);

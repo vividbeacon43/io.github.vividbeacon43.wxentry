@@ -27,7 +27,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "256";
+    static final String BUILD = "258";
     public static final String EDITION = "free";
     static final boolean RP_PREMIUM_EDITION = false;
     static final boolean TABLET_PREMIUM_EDITION = false;

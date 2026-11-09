@@ -1,4 +1,4 @@
-"""Build and verify v256 kernels; signing is optional. Never deploy or change the APK."""
+"""Build and verify v258 kernels; signing is optional. Never deploy or change the APK."""
 from pathlib import Path
 import sys,subprocess,zipfile,json,hashlib,re,base64,os,uuid,argparse
 ROOT=Path(__file__).resolve().parents[1]
@@ -38,6 +38,7 @@ def compile_dex(edition):
     sources=[src/'Kernel.java',ROOT/'kernel/VoiceRecallRuntime.java',ROOT/'kernel/VoiceForwardRuntime.java',ROOT/'kernel/VoiceForwardSender.java',ROOT/'kernel/VoiceForwardPicker.java',ROOT/'kernel/VoiceForwardTargets.java',ROOT/'kernel/VoiceForwardQueue.java',ROOT/'kernel/VoiceForwardIcon.java',ROOT/'kernel/VoiceForwardLayout.java']
     sources += [ROOT/'kernel'/name for name in ['RedPacketUi.java','RedPacketUiNative.java','RedPacketPolicy.java','RedPacketEngine.java','RedPacketNative.java','RedPacketRuntime.java','RedPacketSettings.java','ReceiptConfig.java','ReceiptStore.java','ReceiptTargets.java','ReceiptSettings.java','MomentsConfig.java','MomentsSettings.java','SnsLocalData.java','SnsLocalSelection.java','SnsLocalStore.java','SnsLocalSettings.java','SettingsUi.java','PlusPanelLayout.java','RecallTipRuntime.java','RecallMarkStore.java','RecallMarkLayout.java','NativeSceneBus.java','MediaMessagePolicy.java','RecallMediaCache.java','MediaNative.java','MediaRecallRuntime.java','OriginalImageRuntime.java','TransferEngine.java','TransferNative.java','TransferRuntime.java']]
     if edition in ['plus','vip']:sources += [ROOT/'kernel/ImageRecallRuntime.java',ROOT/'kernel/RecallImageCache.java',*[ROOT/'kernel'/n for n in ['SnsForwardCard.java','SnsForwardDraft.java','SnsForwardFiles.java','SnsForwardComposer.java','SnsForwardNative.java','SnsForwardRuntime.java','SnsAdPolicy.java','SnsAdRuntime.java','SnsLocalNative.java','SnsLocalRuntime.java','SnsLocalPicker.java','SnsLocalPanel.java']]]
+    if edition=='vip':sources += sorted((ROOT/'kernel').glob('SnsSchedule*.java'))
     run([JAVAC,'-encoding','UTF-8','-source','8','-target','8','-nowarn','-cp',CP,'-d',classes,*sources])
     jar=out/'classes.jar'
     with zipfile.ZipFile(jar,'w') as z:
@@ -104,6 +105,15 @@ media_fixtures += [ROOT/'tests/fixtures'/n for n in ['w41/u.java','com/tencent/m
 media_fixtures += [ROOT/'tests/runtime-fixtures/android/os'/n for n in ['Handler.java','Looper.java','SystemClock.java']]
 run([JAVAC,'-encoding','UTF-8','-source','8','-target','8','-nowarn','-d',media_runtime_tests,*media_fixtures,*[ROOT/'kernel'/n for n in ['MediaMessagePolicy.java','RecallMediaCache.java','MediaRecallRuntime.java','OriginalImageRuntime.java','ReceiptConfig.java']],ROOT/'tests/MediaRuntimeBehaviorTest.java'])
 checks['media_revoke_original_queue_behavior']=run([JAVA,'-cp',media_runtime_tests,'com.zafiro.wxentry.kernel.MediaRuntimeBehaviorTest',OUT]);print(checks['media_revoke_original_queue_behavior'],flush=True)
+schedule_tests=OUT/'schedule-test-classes';schedule_tests.mkdir()
+run([JAVAC,'-encoding','UTF-8','-source','8','-target','8','-nowarn','-d',schedule_tests,ROOT/'kernel/SnsScheduleData.java',ROOT/'kernel/SnsScheduleEngine.java',ROOT/'tests/SnsScheduleEngineTest.java'])
+checks['vip_scheduled_moments_journal']=run([JAVA,'-cp',schedule_tests,'com.zafiro.wxentry.kernel.SnsScheduleEngineTest']);print(checks['vip_scheduled_moments_journal'],flush=True)
+schedule_store_tests=OUT/'schedule-store-test-classes';schedule_store_tests.mkdir()
+run([JAVAC,'-encoding','UTF-8','-source','8','-target','8','-nowarn','-d',schedule_store_tests,*list((ROOT/'tests/schedule-fixtures').rglob('*.java')),ROOT/'kernel/ReceiptConfig.java',ROOT/'kernel/SnsScheduleData.java',ROOT/'kernel/SnsScheduleEngine.java',ROOT/'kernel/SnsScheduleStore.java',ROOT/'tests/SnsScheduleStoreTest.java'])
+checks['vip_scheduled_moments_atomic_store']=run([JAVA,'-cp',schedule_store_tests,'com.zafiro.wxentry.kernel.SnsScheduleStoreTest',OUT]);print(checks['vip_scheduled_moments_atomic_store'],flush=True)
+wake_tests=OUT/'schedule-wake-test-classes';wake_tests.mkdir()
+run([JAVAC,'-encoding','UTF-8','-source','8','-target','8','-nowarn','-d',wake_tests,*list((ROOT/'tests/schedule-wake-fixtures').rglob('*.java')),ROOT/'kernel/SnsScheduleData.java',ROOT/'kernel/SnsScheduleEngine.java',ROOT/'kernel/SnsScheduleWake.java',ROOT/'tests/SnsScheduleWakeTest.java'])
+checks['vip_screen_off_prewake']=run([JAVA,'-cp',wake_tests,'com.zafiro.wxentry.kernel.SnsScheduleWakeTest']);print(checks['vip_screen_off_prewake'],flush=True)
 moments_tests=OUT/'moments-feature-test-classes';moments_tests.mkdir()
 local_tests=OUT/'sns-local-test-classes';local_tests.mkdir()
 run([JAVAC,'-encoding','UTF-8','-source','8','-target','8','-nowarn','-d',local_tests,*list((ROOT/'tests/sns-local-fixtures').rglob('*.java')),*[ROOT/'kernel'/n for n in ['SnsLocalData.java','SnsLocalSelection.java','SnsLocalStore.java','ReceiptConfig.java']],ROOT/'tests/SnsLocalDataTest.java',ROOT/'tests/SnsLocalStoreTest.java',ROOT/'tests/SnsLocalSelectionTest.java'])
@@ -138,11 +148,11 @@ print(checks['redpacket_settings_reply_flow'],flush=True)
 for cls,name in [('ReceiptTest','receipt_lists_seconds_and_migration'),('TransferTest','transfer_native_receive_flow'),('ReceiptKeywordTest','vip_receipt_keyword_filter')]:
     checks[name]=run([JAVA,'-Dwxentry.test.dir='+str(OUT/cls),'-cp',runtime_tests,'com.zafiro.wxentry.kernel.'+cls]);print(checks[name],flush=True)
 if args.native_apk:
-    run([JAVAC,'-encoding','UTF-8','-cp',LIBS/'jadx-all.jar','-d',tests,ROOT/'tests/NativeVoiceContractCheck.java',ROOT/'tests/NativeRedPacketContractCheck.java',ROOT/'tests/NativeTransferContractCheck.java',ROOT/'tests/NativeRecallTipContractCheck.java',ROOT/'tests/NativeTabletContractCheck.java',ROOT/'tests/NativeMediaContractCheck.java',ROOT/'tests/NativeSnsForwardContractCheck.java',ROOT/'tests/NativeSnsAdContractCheck.java',ROOT/'tests/NativeRedPacketUiContractCheck.java',ROOT/'tests/NativeSnsLocalContractCheck.java'])
-    for cls,name in [('NativeVoiceContractCheck','native_voice_contracts'),('NativeRedPacketContractCheck','native_redpacket_contracts'),('NativeTransferContractCheck','native_transfer_contracts'),('NativeRecallTipContractCheck','native_recall_message_allocator'),('NativeTabletContractCheck','native_tablet_login_contracts'),('NativeMediaContractCheck','native_media_file_original_contracts'),('NativeSnsForwardContractCheck','native_sns_forward_contracts'),('NativeSnsAdContractCheck','native_sns_ad_contracts'),('NativeRedPacketUiContractCheck','native_complete_redpacket_ui_contracts'),('NativeSnsLocalContractCheck','native_local_moments_contracts')]:
+    run([JAVAC,'-encoding','UTF-8','-cp',LIBS/'jadx-all.jar','-d',tests,ROOT/'tests/NativeVoiceContractCheck.java',ROOT/'tests/NativeRedPacketContractCheck.java',ROOT/'tests/NativeTransferContractCheck.java',ROOT/'tests/NativeRecallTipContractCheck.java',ROOT/'tests/NativeTabletContractCheck.java',ROOT/'tests/NativeMediaContractCheck.java',ROOT/'tests/NativeSnsForwardContractCheck.java',ROOT/'tests/NativeSnsAdContractCheck.java',ROOT/'tests/NativeRedPacketUiContractCheck.java',ROOT/'tests/NativeSnsLocalContractCheck.java',ROOT/'tests/NativeSnsScheduleContractCheck.java'])
+    for cls,name in [('NativeVoiceContractCheck','native_voice_contracts'),('NativeRedPacketContractCheck','native_redpacket_contracts'),('NativeTransferContractCheck','native_transfer_contracts'),('NativeRecallTipContractCheck','native_recall_message_allocator'),('NativeTabletContractCheck','native_tablet_login_contracts'),('NativeMediaContractCheck','native_media_file_original_contracts'),('NativeSnsForwardContractCheck','native_sns_forward_contracts'),('NativeSnsAdContractCheck','native_sns_ad_contracts'),('NativeRedPacketUiContractCheck','native_complete_redpacket_ui_contracts'),('NativeSnsLocalContractCheck','native_local_moments_contracts'),('NativeSnsScheduleContractCheck','native_scheduled_moments_contracts')]:
         checks[name]=run([JAVA,'-cp',str(tests)+os.pathsep+str(LIBS/'jadx-all.jar'),cls,args.native_apk]);print(checks[name],flush=True)
 run([JAVAC,'-encoding','UTF-8','-cp',LIBS/'jadx-all.jar','-d',tests,ROOT/'tests/DexEditionCheck.java'])
-report={'version':'256','apk_target_version':'2.15','checks':checks,'editions':{},'phone_tested':False,'production_deployed':False,'signed':bool(args.signing_key)}
+report={'version':'258','apk_target_version':'2.17','checks':checks,'editions':{},'phone_tested':False,'production_deployed':False,'signed':bool(args.signing_key)}
 if args.native_apk:report['native_apk_sha256']=hashlib.sha256(args.native_apk.read_bytes()).hexdigest()
 for edition in ['free','plus','vip']:
     dex=compile_dex(edition);plain=dex.read_bytes();digest=hashlib.sha256(plain).hexdigest()
@@ -153,18 +163,18 @@ for edition in ['free','plus','vip']:
         continue
     pad=PKCS7(128).padder();padded=pad.update(plain)+pad.finalize()
     enc=Cipher(algorithms.AES(key),modes.CBC(iv)).encryptor();encrypted=enc.update(padded)+enc.finalize()
-    signed=('kernel-v2|'+edition+'|256|'+digest).encode()
+    signed=('kernel-v2|'+edition+'|258|'+digest).encode()
     sig=signer.sign(signed,padding.PKCS1v15(),hashes.SHA256())
     public.verify(sig,signed,padding.PKCS1v15(),hashes.SHA256())
     dec=Cipher(algorithms.AES(key),modes.CBC(iv)).decryptor();decrypted=dec.update(encrypted)+dec.finalize()
     unpad=PKCS7(128).unpadder();assert unpad.update(decrypted)+unpad.finalize()==plain
     publish=OUT/'server-release/kernels'/edition;publish.mkdir(parents=True)
     (publish/'kernel.enc').write_bytes(encrypted)
-    (publish/'kernel.json').write_text(json.dumps({'protocol':2,'edition':edition,'v':'256','sha256':digest,'enc_sha256':hashlib.sha256(encrypted).hexdigest(),'sig':base64.b64encode(sig).decode()},indent=2)+'\n')
+    (publish/'kernel.json').write_text(json.dumps({'protocol':2,'edition':edition,'v':'258','sha256':digest,'enc_sha256':hashlib.sha256(encrypted).hexdigest(),'sig':base64.b64encode(sig).decode()},indent=2)+'\n')
     if edition=='free':
-        legacy_signature=signer.sign(('256|'+digest).encode(),padding.PKCS1v15(),hashes.SHA256())
-        public.verify(legacy_signature,('256|'+digest).encode(),padding.PKCS1v15(),hashes.SHA256())
-        (publish/'legacy.json').write_text(json.dumps({'v':'256','sha256':digest,'sig':base64.b64encode(legacy_signature).decode()},indent=2)+'\n')
+        legacy_signature=signer.sign(('258|'+digest).encode(),padding.PKCS1v15(),hashes.SHA256())
+        public.verify(legacy_signature,('258|'+digest).encode(),padding.PKCS1v15(),hashes.SHA256())
+        (publish/'legacy.json').write_text(json.dumps({'v':'258','sha256':digest,'sig':base64.b64encode(legacy_signature).decode()},indent=2)+'\n')
     report['editions'][edition]={'dex':str(dex),'publish':str(publish),'sha256':digest,'bytes':len(plain),'check':message,'signature_verified':True}
     print(message,flush=True)
 assert len(set(x['sha256'] for x in report['editions'].values()))==3

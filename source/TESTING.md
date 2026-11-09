@@ -1,4 +1,4 @@
-# v256 验证
+# v258 验证
 
 - PASS 29 voice callback behavior checks
 - PASS 45 voice forwarding behavior checks
@@ -15,6 +15,9 @@
 - PASS 15 signed paid tablet entitlement, downgrade and tampering checks
 - PASS 35 media cache expiry, retention, restore, identity and independent original policy checks
 - PASS 31 native media interception, original mode, queued list/owner and failure behavior checks
+- PASS 459 scheduled Moments timer, manual recovery, durable claims, owner/media codec and duplicate guards
+- PASS 32 scheduled Moments account/VIP isolation, fsynced atomic failure, crash recovery and single-submit store checks
+- PASS 41 private idle alarm, VIP/account/queue gates, bounded screen-off CPU lock, stale cancellation and release checks
 - PASS 49 local Moments codec, immutable edits, identity and bounded retention checks
 - PASS 43 local Moments account isolation, paid grants, atomic failure, corrupt recovery and size cleanup checks
 - PASS 67 all-friend and random-count selection, uniqueness, range and non-mutating checks
@@ -40,26 +43,19 @@
 - PASS 6 native Moments merged-page and advertising marker contracts
 - PASS 37 native complete red packet entry, page selector and application route contracts
 - PASS 35 native local Moments post binding, view pooling, avatar and profile contracts
+- PASS 45 native scheduled text/photo builder, visibility, ordered ingestion, commit and result contracts
 - PASS 168 framework DEX ordering/search/body/immutability checks
 - PASS 81 final DEX enum reflection contracts
 - PASS 6 signed loader upgrade/rollback checks
 - PASS 8 APK manifest protocol and delivery checks
 
-## 测试机与真实红包
+本次在 Android 14 / 微信 8.0.80（3220）实机验证 VIP 定时图文。
 
-Android14、微信8.0.80（3220）、服务端正式绑定的VIP账号。用户发送小额红包，模块在原有前台领取模式执行；未由测试代理发送真实消息、点赞或付款。
-
-- 普通红包含test：命中跳过＋模糊匹配，日志确认跳过，未拉起领取页。
-- 皮肤红包含test：同规则跳过。
-- 皮肤红包“恭喜发财”：未命中，自动打开LuckyMoneyNewReceiveUI并拆包，原生结果和详情页确认0.01元已存入零钱。
-- 切换为仅领取命中＋精确匹配后，皮肤红包“这是test红包”被跳过；祝福语完整等于test的皮肤红包自动领取，原生结果和详情页再次确认0.01元到账。
-
-实际菜单验证包括两策略互斥、开启时空词表不能保存、多词显示、仅领取＋精确保存后重开、红包／转账分开设置。测试用词预置后通过真实菜单保存策略，未将手机ADB输入法的乱序输入当作成功输入。转账备注过滤通过自动行为、解析和原生字段契约检查，本次未另做真实转账到账测试，也未重复静默模式真实资金测试。
-
-## 打赏与最终包
-
-真实红包实测后，按用户新增要求仅修改三种内核中的打赏代码。逐文件哈希验证红包、转账及设置源文件完全相同；三份Kernel去除打赏区段后的源代码哈希也相同。最终包重新通过全部1711项检查、168项加载器兼容、81项枚举、6项签名回退、8项APK协议，以及2.05／2.07／2.09／2.11／2.13旧加载器检查；最终安装字节与构建报告再次核对。
-
-正常点击打赏已在外部浏览器打开https://www.zidianidc.com/shop/Z2EWXNI6，并核对浏览器完整地址。临时停用浏览器后点击打赏，提示“未找到可用浏览器，打赏链接已复制”；在未保存的模块输入框粘贴验证完整URL，随后取消。浏览器原启用状态在finally中恢复并再次逐项校验。
-
-最终已清除临时关键词测试设置，红包／转账原配置精确恢复；测试机VIP升级和用户要求的充电亮屏值7保持不变。所有截图、真实授权、设备标识、原始日志和私有配置均不包含在源码包内。
+- 系统图片选择器真实多选三图，编辑、保存、私密范围及保存后蓝色开关显示均已验证。
+- 三图按原生次序显示；原生时间输入用于编辑流程，临近旧计划时间的编辑保护已通过状态机检查。
+- 微信停止运行并错过计划后转为待确认，不自动补发；确认后仅提交一次文字，原生私密详情已验证。
+- 最终发布字节实测：2026-11-09T06:04:56+08:00 息屏，计划 2026-11-09T06:09:18+08:00，原生提交 2026-11-09T06:09:26.258+08:00，服务器确认 2026-11-09T06:09:36.836000+08:00。连续息屏 280.8 秒后确认三图成功。实际提交比计划晚约 8.3 秒。
+- 系统闹钟记录确认私有 wakeup 闹钟已触发，CPU 锁有释放记录，确认成功前屏幕均为 Asleep。测试条件为连接电脑充电后手动息屏，没有强制进入深度 Doze；不承诺强制停止 / 进程被杀后的静默冷启动，错过时间仍需确认。
+- 早期候选曾出现后台误判及编辑到点仍执行旧任务，均在最终包修复；最终包新增编辑保护、待确认恢复和 CPU 锁竞态检查。
+- 真实图文测试内容已清理；恢复后刷新自己的相册确认今天没有测试帖，8 条专用任务、测试图库文件和模块图片副本也已清理。用户原生缓存未删除，6 项原有模块设置逐字节保留，VIP 与充电亮屏值 7 保留。
+- 本次没有重复进行真实红包 / 转账收款测试；相关代码与 v256 字节一致，运行完整既有回归检查。
