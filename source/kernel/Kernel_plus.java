@@ -27,7 +27,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "258";
+    static final String BUILD = "260";
     public static final String EDITION = "plus";
     static final boolean RP_PREMIUM_EDITION = true;
     static final boolean TABLET_PREMIUM_EDITION = true;
@@ -476,6 +476,7 @@ static boolean wxVersionOk(Object actObj) {
         try { hookAvatarTag(cl); } catch (Throwable t) { T("avatar tag hook err " + t); }
 
         try { RecallMarkLayout.start(cl); } catch (Throwable t) { T("ARMARK UI unavailable " + t.getClass().getSimpleName()); }
+        try { UnreadReadShortcut.start(cl); } catch (Throwable t) { T("UNREAD shortcut unavailable " + t.getClass().getSimpleName()); }
         try { VoiceRecallRuntime.start(cl); } catch (Throwable t) { T("ARVOICE install-error " + t.getClass().getSimpleName()); }
         try { MediaRecallRuntime.start(cl); } catch (Throwable t) { T("ARMEDIA install-error " + t.getClass().getSimpleName()); }
         try { OriginalImageRuntime.start(cl); } catch (Throwable t) { T("ARORIGINAL install-error " + t.getClass().getSimpleName()); }
@@ -636,7 +637,11 @@ static boolean wxVersionOk(Object actObj) {
     }
 
 
-    private void markAllRead(final Activity act) {
+    static void markUnreadShortcut(final Activity act, final Runnable complete) { new Kernel().markAllRead(act, complete); }
+
+    private void markAllRead(final Activity act) { markAllRead(act, null); }
+
+    private void markAllRead(final Activity act, final Runnable complete) {
         new Thread(new Runnable() {
             public void run() {
                 int n = 0;
@@ -754,11 +759,12 @@ static boolean wxVersionOk(Object actObj) {
                 try {
                     act.runOnUiThread(new Runnable() {
                         public void run() {
-                            Toast.makeText(act, e == null ? ("已标记已读 " + cnt + " 个会话") : ("失败: " + e),
-                                    Toast.LENGTH_SHORT).show();
+                            try { Toast.makeText(act, e == null ? ("已标记已读 " + cnt + " 个会话") : ("失败: " + e),
+                                    Toast.LENGTH_SHORT).show(); }
+                            finally { if (complete != null) complete.run(); }
                         }
                     });
-                } catch (Throwable t) {}
+                } catch (Throwable t) { if (complete != null) complete.run(); }
             }
         }).start();
     }

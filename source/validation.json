@@ -1,5 +1,5 @@
 {
-  "version": "258",
+  "version": "260",
   "apk_target_version": "2.17",
   "checks": {
     "voice_callback_behavior": "PASS 29 voice callback behavior checks",
@@ -49,21 +49,21 @@
   },
   "editions": {
     "free": {
-      "sha256": "7594b42bd8c6bfa00439d785c8161f2630b20eff5199f4d089357f7f2ed0b04e",
-      "bytes": 468460,
-      "check": "PASS edition=free BUILD=258 voice=true forward=true receipt=true redpacket_premium=false receive_mode=foreground-auto-open image=false tablet_premium=false media_prefetch=true original_download=true keyword_filter_vip_only=true",
+      "sha256": "78f1b7b515844d2eb24b4ff3b05ad03080cc087448a410bf3e973b7523d902cd",
+      "bytes": 475696,
+      "check": "PASS edition=free BUILD=260 voice=true forward=true receipt=true redpacket_premium=false receive_mode=foreground-auto-open image=false tablet_premium=false media_prefetch=true original_download=true keyword_filter_vip_only=true",
       "signature_verified": true
     },
     "plus": {
-      "sha256": "f1265c22136adfa625ca940bcb77958e355d2c24d8d58f6db5fbf9c7197e3da0",
-      "bytes": 567120,
-      "check": "PASS edition=plus BUILD=258 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true tablet_premium=true media_prefetch=true original_download=true keyword_filter_vip_only=true",
+      "sha256": "3d1fc5fe4dfaaf08000f2e0da952c1ec52718987e7813e02351b374de2ccb77a",
+      "bytes": 574292,
+      "check": "PASS edition=plus BUILD=260 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true tablet_premium=true media_prefetch=true original_download=true keyword_filter_vip_only=true",
       "signature_verified": true
     },
     "vip": {
-      "sha256": "59e72b56a7b71d8e35f17053aa306cab8e28d23c4726debd18e0eb42ab51d40a",
-      "bytes": 619884,
-      "check": "PASS edition=vip BUILD=258 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true tablet_premium=true media_prefetch=true original_download=true keyword_filter_vip_only=true",
+      "sha256": "81f8b548532f51d264b00c38a23b4bb61516a8273e987427c66b3fe5d324be4f",
+      "bytes": 627064,
+      "check": "PASS edition=vip BUILD=260 voice=true forward=true receipt=true redpacket_premium=true receive_mode=single-choice image=true tablet_premium=true media_prefetch=true original_download=true keyword_filter_vip_only=true",
       "signature_verified": true
     }
   },
@@ -71,115 +71,68 @@
   "production_deployed": true,
   "signed": true,
   "native_apk_sha256": "9d9b6c516e8e07e437c81485fde21fe13ce4f61b37d19e793fff40c71be39c0e",
+  "source_baseline": "258",
+  "apk_unchanged": true,
+  "backend_unchanged": true,
+  "behavior_and_native_contract_checks": 2288,
+  "framework_dex_checks_per_loader": 168,
+  "tested_loader_versions": [
+    "2.05",
+    "2.07",
+    "2.09",
+    "2.11",
+    "2.13",
+    "2.15",
+    "2.17"
+  ],
+  "enum_contract_checks": 81,
+  "signed_loader_upgrade_rollback_checks": 6,
   "phone_validation": {
     "phone_tested": true,
     "exact_final_bytes_verified": true,
+    "kernel_version": "260",
+    "kernel_edition": "vip",
+    "kernel_sha256": "81f8b548532f51d264b00c38a23b4bb61516a8273e987427c66b3fe5d324be4f",
     "apk_version": "2.17",
-    "kernel_version": "258",
     "apk_sha256": "102ee7278692c85900be57d358ba6569bca3699fb4cd4ea2a76917523f45e527",
-    "kernel_sha256": "59e72b56a7b71d8e35f17053aa306cab8e28d23c4726debd18e0eb42ab51d40a",
     "wechat_version": "8.0.80 (3220)",
     "android_version": "14",
-    "screen_off_background_3min_passed": true,
-    "screen_off_started": "2026-11-09T06:04:56+08:00",
-    "planned_at": "2026-11-09T06:09:18+08:00",
-    "native_submit_observed": "2026-11-09T06:09:26.258+08:00",
-    "published_confirmed_at": "2026-11-09T06:09:36.836000+08:00",
-    "screen_off_seconds_until_confirmation": 280.8359999656677,
-    "native_submit_delay_seconds": 8.258,
-    "screen_stayed_asleep_until_server_confirmation": true,
-    "private_idle_alarm_system_wakeup_verified": true,
-    "partial_cpu_lock_released_verified": true,
-    "final_test_photo_count": 3,
-    "final_test_visibility": "only-self",
-    "final_test_draft_source": "dedicated module-owned queue fixture; real system photo picker and editing tested separately",
-    "scheduled_multi_photo_published_and_deleted": true,
-    "manual_text_recovery_published_and_deleted": true,
-    "missed_requires_confirmation": true,
-    "temporary_test_posts_cleaned": true,
-    "native_ui_three_photo_order_verified": true,
-    "screen_off_charging_usb_tested": true,
-    "deep_doze_forced_tested": false,
-    "force_stopped_auto_wake_supported": false,
-    "real_transfer_tested": false,
-    "real_redpacket_tested": false,
-    "original_receipt_settings_preserved": true,
-    "all_original_module_settings_preserved": true,
-    "files_checked": 6,
-    "vip_upgrade_retained": true,
+    "device_model": "OnePlus9Pro LE2120",
+    "native_style_verified": true,
+    "native_round_background_and_label_reused": true,
+    "native_checkmark_icon": true,
+    "mirror_position_verified": true,
+    "mark_all_read_passed": true,
+    "native_unread_count_before": 2,
+    "native_unread_count_after": 0,
+    "marked_conversations_in_trace": 3,
+    "native_back_button_passed": true,
+    "empty_sheet_reopen_passed": true,
+    "duplicate_button_absent": true,
+    "light_dark_verified": true,
+    "original_light_theme_restored": true,
+    "settings_preserved": true,
+    "settings_files_checked": 6,
+    "existing_vip_license_preserved": true,
     "charging_stay_awake_preserved": true,
-    "real_license_unchanged": true
+    "scheduled_task_queue_empty_before_restart": true,
+    "production_deployed": false,
+    "completed_at": "2026-11-09T16:27:29.822012+08:00"
   },
-  "source_baseline": "256",
-  "apk_version": "2.17",
-  "behavior_and_contract_checks": 2288,
-  "loader_checks": "PASS 168 framework DEX ordering/search/body/immutability checks",
-  "loader_enum_checks": "PASS 81 final DEX enum reflection contracts",
-  "legacy_loader_compatibility": {
-    "2.05": "PASS 168 framework DEX ordering/search/body/immutability checks",
-    "2.07": "PASS 168 framework DEX ordering/search/body/immutability checks",
-    "2.09": "PASS 168 framework DEX ordering/search/body/immutability checks",
-    "2.11": "PASS 168 framework DEX ordering/search/body/immutability checks",
-    "2.13": "PASS 168 framework DEX ordering/search/body/immutability checks",
-    "2.15": "PASS 168 framework DEX ordering/search/body/immutability checks"
-  },
-  "apk_manifest_contract": {
-    "checks": "PASS 8 APK manifest protocol and delivery checks",
-    "versions": [
-      "2.17",
-      "2.18"
+  "source_preservation": {
+    "production_changes": [
+      "kernel/Kernel_free.java",
+      "kernel/Kernel_plus.java",
+      "kernel/Kernel_vip.java",
+      "kernel/UnreadReadShortcut.java"
     ],
-    "loader_signature_protocol": "v|name|sha256"
+    "all_existing_receipt_recall_schedule_moments_and_server_sources_preserved": true,
+    "existing_mark_all_read_body_preserved_except_completion_callback": true,
+    "loader_apk_logic_identical": true
   },
-  "signed_loader_rollback_checks": 6,
-  "backend_unchanged": true,
-  "service_restart": false,
-  "scheduled_moments_vip_only": true,
-  "scheduled_moments_private_account_queue": true,
-  "prewake_screen_off_cpu_only": true,
-  "prewake_lock_timeout_ms": 90000,
-  "no_automatic_missed_or_uncertain_resubmit": true,
-  "existing_forwarder_remains_editor_only": true,
-  "receipt_original_forwarder_sources_preserved": true,
-  "loader": {
-    "versionCode": 117,
-    "versionName": "2.17",
-    "sha256": "e181a1380288b0e261b648a80c9db6b8519317a94526cd9b85231e2fde89caf1",
-    "bytes": 484448,
-    "checks": "PASS 168 framework DEX ordering/search/body/immutability checks",
-    "enum_contracts": "PASS 81 final DEX enum reflection contracts",
-    "optimized_runtime_tested": true,
-    "signed_cache_input_immutable": true,
-    "runtime_dependency_source_sha256": "fe3e12c45acf75f92369685fd02d1d7a7323385dc725680a9b98a0dac0ea554b",
-    "single_dex": true,
-    "kernel_inputs": {
-      "free": "7594b42bd8c6bfa00439d785c8161f2630b20eff5199f4d089357f7f2ed0b04e",
-      "plus": "f1265c22136adfa625ca940bcb77958e355d2c24d8d58f6db5fbf9c7197e3da0",
-      "vip": "59e72b56a7b71d8e35f17053aa306cab8e28d23c4726debd18e0eb42ab51d40a"
-    }
-  },
-  "apks": {
-    "2.17": {
-      "versionCode": 117,
-      "versionName": "2.17",
-      "sha256": "102ee7278692c85900be57d358ba6569bca3699fb4cd4ea2a76917523f45e527",
-      "bytes": 464002,
-      "same_signer": true,
-      "v1_v2_v3_verified": true,
-      "loader_sha256": "e181a1380288b0e261b648a80c9db6b8519317a94526cd9b85231e2fde89caf1",
-      "embedded_free_sha256": "7594b42bd8c6bfa00439d785c8161f2630b20eff5199f4d089357f7f2ed0b04e",
-      "phone_tested": true
-    },
-    "2.18": {
-      "versionCode": 118,
-      "versionName": "2.18",
-      "sha256": "9b76d88eed633c65e709447de85fca25ef17801f9224015aa9e777c35ebedb39",
-      "bytes": 464002,
-      "same_signer": true,
-      "v1_v2_v3_verified": true,
-      "loader_sha256": "9028380f2f784ac1a94ec1bbe29d759eeeaaac10c88ebe7f83c099708984fa56",
-      "embedded_free_sha256": "a45cb72d2992ecd29082e450ee4e0ced7f2cc62aba0bc52ebbafa4fc735c3f85",
-      "phone_tested": false
-    }
-  }
+  "limitations": [
+    "Final device acceptance used the existing VIP test account. Free/advanced editions were compiled and DEX-checked without changing the real account entitlement.",
+    "This is an unread-sheet UI shortcut. Payment, anti-recall and scheduled publishing behavior was preserved and not retested with new transactions/posts.",
+    "Native unread sheet support was visually tested on WeChat 8.0.80 (3220) / Android14."
+  ]
 }

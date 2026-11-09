@@ -41,7 +41,7 @@ public final class DexEditionCheck {
         Map<String,String> values=new HashMap<>();
         for(Field f:kernel.getStaticFields())if(f.getInitialValue() instanceof StringEncodedValue)
             values.put(f.getName(),((StringEncodedValue)f.getInitialValue()).getValue());
-        if(!args[1].equals(values.get("EDITION"))||!"258".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
+        if(!args[1].equals(values.get("EDITION"))||!"260".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
         for(String name:new String[]{"RedPacketUi","RedPacketUiNative","RedPacketPolicy","RedPacketEngine","RedPacketNative","RedPacketRuntime","RedPacketSettings"})
             if(!red.contains(root+name+";"))throw new AssertionError("Red packet runtime missing: "+name);
         boolean contextAtBoot=false, nativeUiDelegate=false, fullNativeEntry=false;

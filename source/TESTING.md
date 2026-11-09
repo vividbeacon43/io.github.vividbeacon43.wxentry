@@ -1,4 +1,4 @@
-# v258 验证
+# v260 验证
 
 - PASS 29 voice callback behavior checks
 - PASS 45 voice forwarding behavior checks
@@ -44,18 +44,9 @@
 - PASS 37 native complete red packet entry, page selector and application route contracts
 - PASS 35 native local Moments post binding, view pooling, avatar and profile contracts
 - PASS 45 native scheduled text/photo builder, visibility, ordered ingestion, commit and result contracts
-- PASS 168 framework DEX ordering/search/body/immutability checks
-- PASS 81 final DEX enum reflection contracts
-- PASS 6 signed loader upgrade/rollback checks
-- PASS 8 APK manifest protocol and delivery checks
 
-本次在 Android 14 / 微信 8.0.80（3220）实机验证 VIP 定时图文。
-
-- 系统图片选择器真实多选三图，编辑、保存、私密范围及保存后蓝色开关显示均已验证。
-- 三图按原生次序显示；原生时间输入用于编辑流程，临近旧计划时间的编辑保护已通过状态机检查。
-- 微信停止运行并错过计划后转为待确认，不自动补发；确认后仅提交一次文字，原生私密详情已验证。
-- 最终发布字节实测：2026-11-09T06:04:56+08:00 息屏，计划 2026-11-09T06:09:18+08:00，原生提交 2026-11-09T06:09:26.258+08:00，服务器确认 2026-11-09T06:09:36.836000+08:00。连续息屏 280.8 秒后确认三图成功。实际提交比计划晚约 8.3 秒。
-- 系统闹钟记录确认私有 wakeup 闹钟已触发，CPU 锁有释放记录，确认成功前屏幕均为 Asleep。测试条件为连接电脑充电后手动息屏，没有强制进入深度 Doze；不承诺强制停止 / 进程被杀后的静默冷启动，错过时间仍需确认。
-- 早期候选曾出现后台误判及编辑到点仍执行旧任务，均在最终包修复；最终包新增编辑保护、待确认恢复和 CPU 锁竞态检查。
-- 真实图文测试内容已清理；恢复后刷新自己的相册确认今天没有测试帖，8 条专用任务、测试图库文件和模块图片副本也已清理。用户原生缓存未删除，6 项原有模块设置逐字节保留，VIP 与充电亮屏值 7 保留。
-- 本次没有重复进行真实红包 / 转账收款测试；相关代码与 v256 字节一致，运行完整既有回归检查。
+- 2288 项行为 / 原生接口检查通过。
+- 2.05、2.07、2.09、2.11、2.13、2.15、2.17 加载器各通过 168 项新内核 DEX 兼容检查；最终 APK DEX 通过 81 项枚举契约检查。
+- 6 项真实签名升级 / 前向回退检查通过。
+- 真机最终字节与发布内核摘要一致。原生未读数 2 → 0，首页红点清空，返回 / 空列表重进 / 深浅色 / 无重复按钮均通过。原设置、VIP 和充电亮屏保持。
+- 未分别切换免费 / 高级授权做真机测试；未重复进行真实红包、转账或定时发表操作。
