@@ -14,11 +14,11 @@ import java.util.*;
 /** Read-only post identity, genuine-like lookup, native avatar loading and native contact navigation. */
 final class SnsLocalNative {
     static ClassLoader cl;static Class<?> infoType,modelType,itemType,interactionType,handlerType;
-    static Method avatar,profile;
+    static Method avatar,profile,nameWeight;
     static final class Target {final String owner,key;Target(String owner,String key){this.owner=owner;this.key=key;}}
     static Class<?> cls(String name)throws Exception{return Class.forName(name,false,cl);}
     static void init(ClassLoader loader)throws Exception{
-        cl=loader;infoType=cls("com.tencent.mm.plugin.sns.storage.SnsInfo");modelType=cls("cl4.p");itemType=cls("yk4.o2");interactionType=cls("com.tencent.mm.plugin.sns.ui.improve.view.ImproveInteractionLayout");handlerType=cls("zk4.g");
+        cl=loader;nameWeight=cls("com.tencent.mm.ui.ok").getDeclaredMethod("w0",android.graphics.Paint.class,float.class);infoType=cls("com.tencent.mm.plugin.sns.storage.SnsInfo");modelType=cls("cl4.p");itemType=cls("yk4.o2");interactionType=cls("com.tencent.mm.plugin.sns.ui.improve.view.ImproveInteractionLayout");handlerType=cls("zk4.g");
         itemType.getDeclaredMethod("q");itemType.getDeclaredMethod("getCommentView");cls("yk4.d2").getDeclaredMethod("getCommentContainer");
         modelType.getDeclaredMethod("Y0");modelType.getDeclaredMethod("a1");interactionType.getDeclaredMethod("getLikeLayout");interactionType.getDeclaredMethod("getCommentLayout");
         interactionType.getConstructor(Context.class);interactionType.getDeclaredMethod("getDivider");
@@ -65,9 +65,10 @@ final class SnsLocalNative {
     static CharSequence likesText(Object view){Object value=XposedHelpers.getObjectField(view,"m");return value instanceof CharSequence?(CharSequence)value:likesLabel(view).getText();}
     static void likeStyle(View local,View source){
         local.setPadding(source.getPaddingLeft(),source.getPaddingTop(),source.getPaddingRight(),source.getPaddingBottom());
-        TextView to=likesLabel(local),from=likesLabel(source);to.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,from.getTextSize());to.setTypeface(from.getTypeface());to.setIncludeFontPadding(from.getIncludeFontPadding());to.setLineSpacing(from.getLineSpacingExtra(),from.getLineSpacingMultiplier());
+        TextView to=likesLabel(local),from=likesLabel(source);to.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,from.getTextSize());to.setTypeface(from.getTypeface());to.getPaint().setFakeBoldText(from.getPaint().isFakeBoldText());to.setLetterSpacing(from.getLetterSpacing());to.setTextScaleX(from.getTextScaleX());to.setIncludeFontPadding(from.getIncludeFontPadding());to.setLineSpacing(from.getLineSpacingExtra(),from.getLineSpacingMultiplier());
         try{Object config=XposedHelpers.getStaticObjectField(cls("dk4.a"),"a");if(Boolean.TRUE.equals(XposedHelpers.callMethod(config,"a"))){int padding=((Number)XposedHelpers.callStaticMethod(cls("af5.a"),"b",local.getContext(),6)).intValue();local.setPadding(local.getPaddingLeft(),padding,local.getPaddingRight(),padding);}}catch(Throwable ignored){}
     }
+    static void nameStyle(android.text.TextPaint paint){try{nameWeight.invoke(null,paint,0.8f);}catch(Throwable ignored){}}
     static int linkColor(Context context){return context.getResources().getColor(2131099991);}
     static Object heart(Context context)throws Throwable{
         int size=((Number)XposedHelpers.callStaticMethod(cls("af5.a"),"h",context,2131165473)).intValue(),space=((Number)XposedHelpers.callStaticMethod(cls("af5.a"),"h",context,2131165396)).intValue();

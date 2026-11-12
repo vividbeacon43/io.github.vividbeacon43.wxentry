@@ -11,8 +11,9 @@ import android.graphics.Paint;
 
 /** Shared native switch rows. Explicit drawables avoid host-app theme overrides. */
 final class SettingsUi {
-    static final int BLUE=0xFF2979FF,GRAY=0xFFCCD2DB;
+    static final int BLUE=0xFF2979FF,ROSE=0xFFA82D61,GRAY=0xFFE4D3DB;
     static final int SWITCH_WIDTH=36,SWITCH_HEIGHT=20,THUMB_SIZE=16;
+    static final int CONTROL_SIZE=48,CONTROL_GAP=12,ROW_HEIGHT=64;
     interface Change { boolean set(boolean checked); } // Return the saved state, including on failure.
     static int dp(Context c,int value) { return Math.round(value*c.getResources().getDisplayMetrics().density); }
     static boolean dark(Context c) { return (c.getResources().getConfiguration().uiMode&0x30)==0x20; }
@@ -42,8 +43,8 @@ final class SettingsUi {
             super.onDraw(canvas);canvas.restoreToCount(layer);
             float position=Math.max(0,Math.min(1,(getThumbDrawable().getBounds().centerX()-(x+9*d))/(18*d)));
             boolean checked=isChecked(),enabled=isEnabled(),night=dark(getContext());
-            int track=checked?BLUE:(night?0xFF637083:GRAY);
-            int border=checked?0xFF1760D1:(night?0xFF8B98AA:0xFF929DAC);
+            int track=checked?ROSE:(night?0xFF796575:GRAY);
+            int border=checked?0xFF8B244F:(night?0xFFA18A99:0xFF9C7C8B);
             if(!enabled) { track=night?0xFF505B6B:0xFFDDE2E8;border=night?0xFF7C899B:0xFFAAB3C0; }
             fill.setStyle(Paint.Style.FILL);fill.setColor(track);
             fill.setShadowLayer(0.65f*d,0,0.5f*d,0x24000000);
@@ -62,12 +63,13 @@ final class SettingsUi {
         s.setButtonDrawable((android.graphics.drawable.Drawable)null);s.setBackground(null);
         s.setThumbTintList(null);s.setTrackTintList(null);
         StateListDrawable track=new StateListDrawable();
-        track.addState(new int[]{android.R.attr.state_enabled,android.R.attr.state_checked},shape(c,BLUE,SWITCH_WIDTH,SWITCH_HEIGHT));
+        track.addState(new int[]{android.R.attr.state_enabled,android.R.attr.state_checked},shape(c,ROSE,SWITCH_WIDTH,SWITCH_HEIGHT));
         track.addState(new int[]{android.R.attr.state_enabled},shape(c,GRAY,SWITCH_WIDTH,SWITCH_HEIGHT));
         track.addState(new int[]{},shape(c,GRAY,SWITCH_WIDTH,SWITCH_HEIGHT));
         s.setTrackDrawable(track);s.setThumbDrawable(shape(c,0xFFFFFFFF,18,THUMB_SIZE));
         s.setSwitchMinWidth(dp(c,SWITCH_WIDTH));s.setSwitchPadding(0);s.setThumbTextPadding(0);
-        s.setPadding(dp(c,4),0,dp(c,4),0);s.setMinimumWidth(0);s.setMinWidth(0);s.setMinHeight(0);
+        int inset=dp(c,(CONTROL_SIZE-SWITCH_WIDTH)/2);
+        s.setPadding(inset,0,inset,0);s.setMinimumWidth(0);s.setMinWidth(0);s.setMinHeight(0);
         s.setGravity(Gravity.CENTER);s.setFocusable(false);return s;
     }
     static void bind(final Switch control,boolean checked,final Change change) {
@@ -82,10 +84,16 @@ final class SettingsUi {
             }
         });
     }
+    static LinearLayout.LayoutParams controlSlot(Context c) {
+        int size=dp(c,CONTROL_SIZE);
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(size,size);
+        params.leftMargin=dp(c,CONTROL_GAP);
+        return params;
+    }
     static final class ToggleRow extends LinearLayout {
         final Switch control;final TextView title,subtitle;
         ToggleRow(Context c,String label,String detail,boolean checked,Change change) {
-            super(c);setOrientation(HORIZONTAL);setGravity(Gravity.CENTER_VERTICAL);setMinimumHeight(dp(c,56));
+            super(c);setOrientation(HORIZONTAL);setGravity(Gravity.CENTER_VERTICAL);setMinimumHeight(dp(c,ROW_HEIGHT));
             setPadding(0,dp(c,8),0,dp(c,8));
             LinearLayout labels=new LinearLayout(c);labels.setOrientation(VERTICAL);
             title=text(c,label,16);subtitle=text(c,detail==null?"":detail,12);
@@ -93,8 +101,7 @@ final class SettingsUi {
             labels.addView(title);if(detail!=null&&!detail.isEmpty())labels.addView(subtitle);
             addView(labels,new LinearLayout.LayoutParams(0,-2,1));
             control=SettingsUi.control(c);control.setContentDescription(label);
-            LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(dp(c,44),dp(c,40));right.leftMargin=dp(c,12);
-            addView(control,right);bind(control,checked,change);
+            addView(control,controlSlot(c));bind(control,checked,change);
             setOnClickListener(new View.OnClickListener() { public void onClick(View v) { if(control.isEnabled())control.performClick(); } });
         }
     }

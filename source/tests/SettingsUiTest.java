@@ -8,10 +8,10 @@ public final class SettingsUiTest {
   SettingsUi.ToggleRow row=SettingsUi.toggle(c,"随机延时","1～3 秒 · 点击设置",false,change);
   check(row.children.size()==2&&row.children.get(1)==row.control,"switch occupies rightmost child");
   LinearLayout.LayoutParams label=(LinearLayout.LayoutParams)row.children.get(0).params,right=(LinearLayout.LayoutParams)row.control.params;
-  check(label.width==0&&label.weight==1&&right.width==44,"label receives remaining space; switch keeps its own width");
-  check(row.minimumHeight==56&&!row.control.showText,"touch row is large enough; switch has no overlapping ON/OFF label");
+  check(label.width==0&&label.weight==1&&right.width==48&&right.height==48&&right.leftMargin==12,"label receives remaining space; switch keeps its own width");
+  check(row.minimumHeight==64&&!row.control.showText,"touch row is large enough; switch has no overlapping ON/OFF label");
   StateListDrawable track=(StateListDrawable)row.control.track;
-  check(((GradientDrawable)track.drawables.get(0)).color==SettingsUi.BLUE&&((GradientDrawable)track.drawables.get(1)).color==SettingsUi.GRAY,"explicit blue checked and gray unchecked drawables");
+  check(((GradientDrawable)track.drawables.get(0)).color==SettingsUi.ROSE&&((GradientDrawable)track.drawables.get(1)).color==SettingsUi.GRAY,"explicit rose checked and muted unchecked drawables");
   check(row.control.thumbTint==null&&row.control.trackTint==null,"host theme tint cleared");
   check(writes[0]==0,"initial display never writes settings");row.control.performClick();check(writes[0]==1&&saved[0]&&row.control.isChecked(),"switch click writes once");
   row.performClick();check(writes[0]==2&&!saved[0]&&!row.control.isChecked(),"row click triggers switch exactly once");
@@ -27,7 +27,7 @@ public final class SettingsUiTest {
   check(off.draws.get(1).stroke>0&&off.draws.get(1).color!=off.draws.get(0).color,"outline stays distinguishable from gray fill");
   check(off.draws.get(2).r==8&&off.draws.get(2).shadow>0&&compact.layerType==android.view.View.LAYER_TYPE_SOFTWARE,"small white thumb has rendered shadow");
   compact.setChecked(true);android.graphics.Canvas on=new android.graphics.Canvas();compact.onDraw(on);
-  check(on.draws.get(0).color==SettingsUi.BLUE&&on.draws.get(2).x>off.draws.get(2).x,"checked track is blue and thumb moves right");
+  check(on.draws.get(0).color==SettingsUi.ROSE&&on.draws.get(2).x>off.draws.get(2).x,"checked track is rose and thumb moves right");
   compact.visualPosition=0.5f;android.graphics.Canvas middle=new android.graphics.Canvas();compact.onDraw(middle);
   check(middle.draws.get(2).x>off.draws.get(2).x&&middle.draws.get(2).x<on.draws.get(2).x,"native drag/animation position is preserved by custom painting");
   compact.setEnabled(false);android.graphics.Canvas disabled=new android.graphics.Canvas();compact.onDraw(disabled);check(disabled.draws.get(0).color!=0xFFFFFFFF&&disabled.draws.get(1).stroke>0,"disabled track remains visible on white background");

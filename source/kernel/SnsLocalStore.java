@@ -15,7 +15,7 @@ final class SnsLocalStore {
             String p=path(owner);File file=new File(p);long modified=file.lastModified(),bytes=file.length();
             if(owner.equals(cachedOwner)&&p.equals(cachedPath)&&stamp==modified&&length==bytes)return cached;
             SnsLocalData value=SnsLocalData.empty();boolean okay=true;
-            try{if(bytes>SnsLocalData.MAX_BYTES)throw new IllegalArgumentException();String raw=RedPacketRuntime.read(p);if(file.exists()&&raw==null)throw new IllegalArgumentException();value=SnsLocalData.decode(raw);}catch(Throwable invalid){okay=false;}
+            try{if(bytes>SnsLocalData.MAX_BYTES)throw new IllegalArgumentException();String raw=RedPacketRuntime.read(p);if(file.exists()&&raw==null)throw new IllegalArgumentException();value=SnsLocalData.decode(raw);}catch(Throwable invalid){okay=false;Kernel.T("ARSNSLOCAL load-failed bytes="+bytes+" error="+invalid.getClass().getSimpleName());}
             cachedOwner=owner;cachedPath=p;stamp=modified;length=bytes;cached=value;valid=okay;revision++;return cached;
         }catch(Throwable unavailable){return SnsLocalData.empty();}
     }

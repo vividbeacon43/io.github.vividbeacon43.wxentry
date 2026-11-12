@@ -69,12 +69,18 @@ public class Main implements IXposedHookLoadPackage {
     static final String URL_MANIFEST = BASE + "kernel/manifest";
     static final String URL_KERNEL   = BASE + "kernel/download";
     // === 1.43：模块 APK 自身更新 + 内核自动更新/回滚 ===
-    static final int MY_VC = 117;                       // 由 release.py 打包时改写
-    static final String MY_VN = "2.17";
+    static final int MY_VC = 119;                       // 由 release.py 打包时改写
+    static final String MY_VN = "2.19";
     static final String URL_APK_MANIFEST = BASE + "apk.json";
     static final String URL_APK = BASE + "wxentry.apk";
     static final String APK_PENDING = DIR + "apk.pending";
-    static final String APK_CHECKED = DIR + "apk.checked";
+    static final String KERNEL_APK_VERSION = DIR + "kernel.apk-version";
+    static final String URL_ANNOUNCEMENTS = BASE + "kernel/announcements";
+    static final Object APK_CHECK_LOCK = new Object();
+    static final long APK_CHECK_INTERVAL_MS = 5 * 60 * 1000L;
+    static long lastApkCheckAt = -APK_CHECK_INTERVAL_MS;
+    static int notifiedApkVersion;
+    static boolean updateDialogOpen;
     static final String KERNEL_BAD = DIR + "kernel.bad";
 
 
@@ -82,14 +88,14 @@ public class Main implements IXposedHookLoadPackage {
     static volatile Class<?> RUNNING_KERNEL_CLASS;
     static final KernelDelivery DELIVERY = new KernelDelivery(new File(DIR), new KernelDelivery.Transport() {
         public KernelDelivery.Manifest manifest(String token) throws Exception {
-            String response = new String(channelPost(URL_MANIFEST, "{\"token\":\"" + jesc(token) + "\"}"), "UTF-8");
+            String response = new String(channelPost(URL_MANIFEST, "{\"token\":\"" + jesc(token) + "\",\"apk_v\":" + MY_VC + "}"), "UTF-8");
             if (!"true".equals(jsonStr(response, "ok"))) throw new Exception("Invalid channel response");
             return new KernelDelivery.Manifest(jsonStr(response, "edition"), jsonStr(response, "v"),
                     jsonStr(response, "sha256"), jsonStr(response, "sig"), jsonStr(response, "grant_sig"));
         }
         public byte[] download(String token, KernelDelivery.Manifest m) throws Exception {
             return channelPost(URL_KERNEL, "{\"token\":\"" + jesc(token) + "\",\"v\":\""
-                    + m.version + "\",\"sha256\":\"" + m.sha + "\"}");
+                    + m.version + "\",\"sha256\":\"" + m.sha + "\",\"apk_v\":" + MY_VC + "}");
         }
         public byte[] decrypt(byte[] encrypted) throws Exception { return Main.decrypt(encrypted); }
         public boolean verify(String data, String signature) { return verifySig(data, signature); }
@@ -118,10 +124,26 @@ public class Main implements IXposedHookLoadPackage {
         return EditionPolicy.includesImages(runningEdition) && EditionPolicy.rank(authorized) >= EditionPolicy.rank(runningEdition) ? "1" : "0";
     }
     public static void changeActivation(Activity act) { showActivate(act, readWxid(act)); }
-    static KernelDelivery.Result refreshKernel() throws Exception { try{return DELIVERY.refresh(licField("token"));}finally{TabletModeHooks.refreshAuthorization();} }
+    static KernelDelivery.Result refreshKernel(boolean manual) throws Exception {
+        synchronized (APK_CHECK_LOCK) {
+            ApkRelease apk = checkApkRelease(manual);
+            if (apk != null) throw new ApkUpdateRequired(apk);
+            try {
+                KernelDelivery.Result result = DELIVERY.refresh(licField("token"));
+                String apkVersion = Integer.toString(MY_VC);
+                if (!apkVersion.equals(readText(KERNEL_APK_VERSION))) writeText(KERNEL_APK_VERSION, apkVersion);
+                return result;
+            } finally { TabletModeHooks.refreshAuthorization(); }
+        }
+    }
     static void refreshEditionLater() {
         new Thread(new Runnable() { public void run() {
-            try { refreshKernel(); } catch (Throwable t) { log("edition refresh " + t.getClass().getSimpleName()); }
+            try { refreshKernel(false); }
+            catch (ApkUpdateRequired pending) {
+                // Keep the activation grant current even though kernel downloads are paused.
+                serverVersion();
+            }
+            catch (Exception failure) { log("edition refresh " + failure.getClass().getSimpleName()); }
         }}, "wxentry-edition-update").start();
     }
     public static String runningKernelVersion() {
@@ -140,7 +162,7 @@ public class Main implements IXposedHookLoadPackage {
         catch (Throwable missing) { RUNNING_EDITION = "free"; }
     }
     static void showEditionRestart(final Activity act, String message) {
-        new AlertDialog.Builder(act).setTitle("版本已匹配").setMessage(message)
+        new AlertDialog.Builder(act).setTitle("内核已就绪").setMessage(message)
                 .setPositiveButton("重启微信", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int which) {
                         try {
@@ -211,15 +233,8 @@ public class Main implements IXposedHookLoadPackage {
             .setNegativeButton("激活/更换激活码", new DialogInterface.OnClickListener() {
                 public void onClick(DialogInterface d, int which) { changeActivation(act); }
             })
-            .setNeutralButton("检查内核更新", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int which) {
-                    new Thread(new Runnable() { public void run() {
-                        final String result = checkUpdateNow();
-                        act.runOnUiThread(new Runnable() { public void run() {
-                            if (!act.isFinishing() && !act.isDestroyed()) Toast.makeText(act, result, Toast.LENGTH_LONG).show();
-                        }});
-                    }}, "wxentry-entry-update").start();
-                }
+            .setNeutralButton("检查更新", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which) { openUpdateCenter(act); }
             }).show();
         log("entry status shown");
     }
@@ -262,7 +277,6 @@ public class Main implements IXposedHookLoadPackage {
         try {TabletModeHooks.start(WX_CL,new java.io.File(DIR));}catch(Throwable failure){log("tablet startup unavailable "+failure.getClass().getSimpleName());}
         installRecoveryLifecycle();
         log("handleLoadPackage pkg=" + lp.packageName + " proc=" + PROC);
-        try { cleanApkPending(); } catch (Throwable t) {}
         try {
             if (BOOTLOG.exists() && BOOTLOG.length() > 0) {
                 if (BOOTPREV.exists()) BOOTPREV.delete();
@@ -494,8 +508,7 @@ public class Main implements IXposedHookLoadPackage {
                             // 1.64：boot 不再回 UI 线程跑 —— 首次 DEX 索引要 1~2.4 秒，
                             // 放主线程会卡住首帧/输入。内核内部需要的 UI 操作自己 runOnUiThread。
                             bootKernel(act, dex);
-                            checkUpdateLater();
-                            checkApkUpdateLater();
+
                         } else {
                             // 1.45：拿不到服务器内核（离线首启/下载失败/坏内核被拉黑）→ 直接用 APK 内嵌内核，
                             // 模块至少能用，不再弹「内核不可用」。
@@ -503,6 +516,7 @@ public class Main implements IXposedHookLoadPackage {
                             bootKernel(act, null);
                         }
                     } catch (Throwable t) { log("kernel err " + t); }
+                    finally { checkUpdateLater(act); }
                 }
             }).start();
             return;
@@ -969,13 +983,17 @@ public class Main implements IXposedHookLoadPackage {
                 }
                 writeFileAtomic(new File(LIC), ("wxid=" + wxid + "\ncode=" + code + "\ntoken=" + token + "\n").getBytes("UTF-8"));
                 if (!ensureKernel()) {
+                    final ApkRelease pending = cachedApkRelease();
                     act.runOnUiThread(new Runnable() { public void run() {
-                        if (status != null) status.setText("激活成功，版本下载尚未完成，请检查网络后重试");
+                        if (status != null) status.setText(pending != null
+                                ? "激活成功，请先更新模块 APK"
+                                : "激活成功，版本下载尚未完成，请检查网络后重试");
+                        if (pending != null) showApkPrompt(act, pending, false);
                     }}); return;
                 }
                 final String label = EditionPolicy.name(currentKernelEdition());
                 if (!booted) {
-                    booted = true; bootKernel(act, readVerifiedCache()); checkUpdateLater(); checkApkUpdateLater();
+                    booted = true; bootKernel(act, readVerifiedCache()); checkUpdateLater(act);
                     act.runOnUiThread(new Runnable() { public void run() {
                         if (status != null) status.setText("激活成功，已自动启用" + label);
                         afterActivated(act);
@@ -1054,7 +1072,7 @@ public class Main implements IXposedHookLoadPackage {
 
     /** 取内核明文：优先本地缓存（解密+校验），否则联网拉取 */
     // ---------------- 自检 / 诊断 ----------------
-    static final String APP_VER = "2.17";
+    static final String APP_VER = MY_VN;
     static volatile boolean READY_STARTED = false;   // onWeChatReady 只跑一次
     static final File BOOTLOG = new File(DIR + "boot.log");
     static final File BOOTPREV = new File(DIR + "boot.prev");
@@ -1419,18 +1437,27 @@ public class Main implements IXposedHookLoadPackage {
 
     static byte[] loadKernelBytes() {
         byte[] cached = readVerifiedCache();
-        if (cached != null) { log("kernel from cache"); return cached; }
+        if (cached != null && Integer.toString(MY_VC).equals(readText(KERNEL_APK_VERSION))) {
+            log("kernel from cache");
+            return cached;
+        }
+        // On the first start after an APK upgrade, try the authorized channel before booting the old cache.
+        // A failed network request can still use the cache, revalidated against the current activation.
         if (!ensureKernel()) return null;
-        // ensureKernel 成功时已经验过哈希，这里再读一次，保证返回的就是那份验过的字节
         return readVerifiedCache();
     }
 
-    /** 启动后后台比对一次清单；有新版就悄悄替换（下次启动生效） */
-    static void checkUpdateLater() {
+    static void checkUpdateLater(final Activity act) {
         new Thread(new Runnable() { public void run() {
-            try { Thread.sleep(8000); refreshKernel(); }
-            catch (Throwable t) { log("channel update " + t.getClass().getSimpleName()); }
-        }}, "wxentry-channel-update").start();
+            try {
+                Thread.sleep(2000);
+                refreshKernel(false);
+            } catch (final ApkUpdateRequired pending) {
+                act.runOnUiThread(new Runnable() { public void run() { showApkPrompt(act, pending.release, false); } });
+            } catch (Exception failure) {
+                log("background update " + failure.getClass().getSimpleName());
+            }
+        }}, "wxentry-update").start();
     }
 
     /** 许愿：携带本机授权凭证，服务端验签后才收，wxid 由服务端从凭证里取。 */
@@ -1466,77 +1493,132 @@ public class Main implements IXposedHookLoadPackage {
         return sb.toString();
     }
 
-    // ---------------- 1.43：模块 APK 自更新 ----------------
-
-    /** 后台比对 apk.json；每天最多查一次。有新版就写 apk.pending（v|name|sha|url） */
-    static void checkApkUpdateLater() {
-        new Thread(new Runnable() {
-            public void run() {
-                try { Thread.sleep(12000); } catch (Throwable t) {}
-                try {
-                    File ck = new File(APK_CHECKED);
-                    long now = System.currentTimeMillis();
-                    try { cleanApkPending(); } catch (Throwable t) {}
-                    if (ck.exists() && now - ck.lastModified() < DAY_MS) return;
-                    String man = http(URL_APK_MANIFEST, null);
-                    String v = jsonStr(man, "v"), name = jsonStr(man, "name");
-                    String sha = jsonStr(man, "sha256"), sig = jsonStr(man, "sig");
-                    if (v == null || name == null || sha == null || sig == null) { log("apk manifest empty"); return; }
-                    if (!verifySig(v + "|" + name + "|" + sha, sig)) { log("apk manifest bad sig"); return; }
-                    int sv = 0;
-                    try { sv = Integer.parseInt(v.trim()); } catch (Throwable t) {}
-                    if (sv <= MY_VC) {
-                        try { new File(APK_PENDING).delete(); } catch (Throwable t) {}
-                    } else {
-                        writeText(APK_PENDING, sv + "|" + name + "|" + sha + "|" + URL_APK);
-                        log("apk update available v" + sv + " (" + name + ")");
-                    }
-                    try {
-                        if (!ck.exists()) ck.createNewFile();
-                        ck.setLastModified(now);
-                    } catch (Throwable t) {}
-                } catch (Throwable t) { log("apk update check skip: " + t); }
-            }
-        }).start();
+    static final class ApkRelease {
+        final int version;
+        final String name;
+        ApkRelease(int version, String name) {
+            this.version = version;
+            this.name = name;
+        }
     }
 
-    /** 1.57：apk.pending 里记的版本 <= 当前已装版本时直接删掉。
-     *  以前只在「今天还没查过」时才会重算，装完新版后 pending 会一直挂着，菜单一直显示旧版本可更新。 */
-    static void cleanApkPending() {
+    static final class ApkUpdateRequired extends java.io.IOException {
+        final ApkRelease release;
+        ApkUpdateRequired(ApkRelease release) { this.release = release; }
+    }
+
+    /** Signed apk.json stays compatible with earlier loaders. A failed lookup cannot clear a known update. */
+    static ApkRelease checkApkRelease(boolean manual) throws Exception {
+        ApkRelease pending = cachedApkRelease();
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (!manual && now - lastApkCheckAt < APK_CHECK_INTERVAL_MS) return pending;
         try {
-            String t = readText(APK_PENDING);
-            if (t == null || t.trim().length() == 0) return;
-            String v = t.trim().split("\\|")[0].trim();
-            int sv = Integer.parseInt(v);
-            if (sv <= MY_VC) {
-                new File(APK_PENDING).delete();
-                log("apk.pending stale v" + sv + " cleared (installed " + MY_VC + ")");
+            org.json.JSONObject manifest = new org.json.JSONObject(readUpdateJson(URL_APK_MANIFEST, 16384));
+            String v = manifest.getString("v");
+            String name = manifest.getString("name");
+            String sha = manifest.getString("sha256");
+            String sig = manifest.getString("sig");
+            if (!v.matches("[1-9][0-9]{0,8}") || !name.matches("[A-Za-z0-9._+ -]{1,60}")
+                    || !sha.matches("[a-f0-9]{64}") || !verifySig(v + "|" + name + "|" + sha, sig))
+                throw new java.io.IOException("Invalid APK manifest");
+            int latest = Integer.parseInt(v);
+            File file = new File(APK_PENDING);
+            if (latest <= MY_VC) {
+                if (file.exists() && !file.delete()) throw new java.io.IOException("Cannot clear APK update");
+                pending = null;
+            } else {
+                writeFileAtomic(file, (v + "|" + name + "|" + sha + "|" + URL_APK).getBytes("UTF-8"));
+                pending = new ApkRelease(latest, name);
             }
-        } catch (Throwable t) {}
+            lastApkCheckAt = android.os.SystemClock.elapsedRealtime();
+            return pending;
+        } catch (Exception failure) {
+            if (pending != null) return pending;
+            throw failure;
+        }
     }
 
-    /** 菜单用：有新模块版本时返回版本名（如 1.44），否则 null */
+    static ApkRelease cachedApkRelease() {
+        String value = readText(APK_PENDING);
+        if (value == null) return null;
+        String[] fields = value.trim().split("\\|", -1);
+        if (fields.length != 4 || !fields[0].matches("[1-9][0-9]{0,8}")
+                || !fields[1].matches("[A-Za-z0-9._+ -]{1,60}") || !fields[2].matches("[a-f0-9]{64}"))
+            return null;
+        int version = Integer.parseInt(fields[0]);
+        return version > MY_VC ? new ApkRelease(version, fields[1]) : null;
+    }
+
     public static String apkPendingName() {
-        try {
-            String t = readText(APK_PENDING);
-            if (t == null || t.trim().length() == 0) return null;
-            String[] p = t.trim().split("\\|");
-            try { if (Integer.parseInt(p[0].trim()) <= MY_VC) return null; } catch (Throwable t2) {}
-            String name = p.length > 1 ? p[1] : p[0];
-            return name == null || name.length() == 0 ? null : name;
-        } catch (Throwable t) { return null; }
+        ApkRelease pending = cachedApkRelease();
+        return pending == null ? null : pending.name;
     }
 
-    /** 菜单顶部显示用 */
     public static String myVersionName() { return MY_VN; }
+
+    public static String kernelAnnouncements() throws Exception {
+        return readUpdateJson(URL_ANNOUNCEMENTS, 131072);
+    }
+
+    static String readUpdateJson(String url, int limit) throws Exception {
+        javax.net.ssl.HttpsURLConnection c = (javax.net.ssl.HttpsURLConnection) new java.net.URL(url).openConnection();
+        c.setConnectTimeout(8000);
+        c.setReadTimeout(8000);
+        c.setInstanceFollowRedirects(false);
+        c.setUseCaches(false);
+        c.setRequestProperty("Cache-Control", "no-cache");
+        c.setRequestProperty("User-Agent", "wxentry");
+        try {
+            if (c.getResponseCode() != 200) throw new java.io.IOException("Update endpoint returned " + c.getResponseCode());
+            try (InputStream in = c.getInputStream()) {
+                java.io.ByteArrayOutputStream data = new java.io.ByteArrayOutputStream();
+                byte[] buffer = new byte[4096];
+                for (int n; (n = in.read(buffer)) != -1;) {
+                    if (data.size() + n > limit) throw new java.io.IOException("Update response too large");
+                    data.write(buffer, 0, n);
+                }
+                return data.toString("UTF-8");
+            }
+        } finally { c.disconnect(); }
+    }
+
+    static void showApkPrompt(final Activity act, ApkRelease release, boolean manual) {
+        if (act.isFinishing() || act.isDestroyed() || updateDialogOpen
+                || (!manual && notifiedApkVersion == release.version)) return;
+        notifiedApkVersion = release.version;
+        new AlertDialog.Builder(act).setTitle("模块 APK 可更新")
+                .setMessage("发现模块 " + release.name + "。请先下载并覆盖安装 APK，再彻底退出并重新打开微信，模块会拉取与当前授权对应的内核。")
+                .setPositiveButton("下载 APK", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int which) {
+                        Toast.makeText(act, installApkUpdate(act), Toast.LENGTH_LONG).show();
+                    }
+                }).setNegativeButton("稍后", null).show();
+    }
+
+    public static void openUpdateCenter(final Activity act) {
+        if (act.isFinishing() || act.isDestroyed() || updateDialogOpen) return;
+        updateDialogOpen = true;
+        Toast.makeText(act, "正在检查更新…", Toast.LENGTH_SHORT).show();
+        new Thread(new Runnable() { public void run() {
+            final String result = checkUpdateNow();
+            final ApkRelease pending = cachedApkRelease();
+            act.runOnUiThread(new Runnable() { public void run() {
+                updateDialogOpen = false;
+                if (act.isFinishing() || act.isDestroyed()) return;
+                if (pending != null) showApkPrompt(act, pending, true);
+                else if (result.startsWith("已") && pendingVersion() != null) showEditionRestart(act, result);
+                else new AlertDialog.Builder(act).setTitle("检查更新").setMessage(result)
+                        .setPositiveButton("关闭", null).show();
+            }});
+        }}, "wxentry-manual-update").start();
+    }
 
     /** 用户点「模块可更新」后调用：系统 DownloadManager 下载，失败退回浏览器 */
     public static String installApkUpdate(android.content.Context c) {
-        String t = readText(APK_PENDING);
-        if (t == null) return "没有待更新的模块版本";
-        String[] p = t.trim().split("\\|");
-        String name = p.length > 1 ? p[1] : (p.length > 0 ? p[0] : "");
-        String url = p.length > 3 ? p[3] : URL_APK;
+        ApkRelease pending = cachedApkRelease();
+        if (pending == null) return "没有待更新的模块版本";
+        String name = pending.name;
+        String url = URL_APK;
         try {
             Class<?> uriC = Class.forName("android.net.Uri");
             Object uri = uriC.getMethod("parse", String.class).invoke(null, url);
@@ -1550,7 +1632,7 @@ public class Main implements IXposedHookLoadPackage {
             Class<?> dmC = Class.forName("android.app.DownloadManager");
             dmC.getMethod("enqueue", reqC).invoke(dm, req);
             log("apk download enqueued " + name);
-            return "已开始下载模块 " + name + "，完成后点通知安装";
+            return "已开始下载模块 " + name + "，完成后点通知安装，再彻底退出并重新打开微信";
         } catch (Throwable e) {
             log("dm err " + e);
             try {
@@ -1574,7 +1656,10 @@ public class Main implements IXposedHookLoadPackage {
     /** 主页横幅用：有新版本时返回版本号，否则 null */
     public static String pendingVersion() {
         String target = currentKernelEdition();
-        return target.equals(RUNNING_EDITION) ? null : localVersion() + " · " + EditionPolicy.name(target);
+        String version = localVersion();
+        if (!version.matches("[1-9][0-9]{0,8}")) return null;
+        return target.equals(RUNNING_EDITION) && version.equals(runningKernelVersion())
+                ? null : version + " · " + EditionPolicy.name(target);
     }
 
     /** 用户点横幅后执行下载，返回给他看的文案 */
@@ -1593,10 +1678,10 @@ public class Main implements IXposedHookLoadPackage {
         try { String s = readText(DIR + "kernel.ver"); return s == null ? "?" : s.trim(); } catch (Throwable t) { return "?"; }
     }
 
-    /** 手动检查更新：每天最多一次；发现服务器有新版本时不占当天的次数。返回给用户看的文案。 */
+    /** Manual updates always check the module release before downloading a kernel. */
     public static String checkUpdateNow() {
         try {
-            KernelDelivery.Result result=refreshKernel();
+            KernelDelivery.Result result=refreshKernel(true);
             try {
                 if(!kernelMenuReady()&&APP_CTX_REF instanceof android.content.Context) {
                     String wx=((android.content.Context)APP_CTX_REF).getPackageManager().getPackageInfo("com.tencent.mm",0).versionName;
@@ -1604,6 +1689,9 @@ public class Main implements IXposedHookLoadPackage {
                 }
             }catch(Throwable unavailable) { }
             return kernelUpdateMessage(result);
+        }
+        catch (ApkUpdateRequired pending) {
+            return "模块 " + pending.release.name + " 可更新，请先安装 APK，再彻底退出并重新打开微信";
         }
         catch (Throwable t) {
             String detail=t.getClass().getSimpleName();Throwable cause=t.getCause();if(cause!=null)detail+="/"+cause.getClass().getSimpleName();
@@ -1621,7 +1709,7 @@ public class Main implements IXposedHookLoadPackage {
     }
 
     static boolean ensureKernel() {
-        try { refreshKernel(); return readVerifiedCache() != null; }
+        try { refreshKernel(false); return readVerifiedCache() != null; }
         catch (Throwable t) { log("channel fetch " + t.getClass().getSimpleName()); return readVerifiedCache() != null; }
     }
 

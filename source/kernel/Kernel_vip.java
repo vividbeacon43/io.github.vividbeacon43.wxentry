@@ -27,7 +27,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "260";
+    static final String BUILD = "281";
     public static final String EDITION = "vip";
     static final boolean RP_PREMIUM_EDITION = true;
     static final boolean TABLET_PREMIUM_EDITION = true;
@@ -477,10 +477,13 @@ static boolean wxVersionOk(Object actObj) {
 
         try { RecallMarkLayout.start(cl); } catch (Throwable t) { T("ARMARK UI unavailable " + t.getClass().getSimpleName()); }
         try { UnreadReadShortcut.start(cl); } catch (Throwable t) { T("UNREAD shortcut unavailable " + t.getClass().getSimpleName()); }
+        try { GameEmojiRuntime.start(cl); } catch (Throwable t) { T("GAMEEMOJI unavailable " + t.getClass().getSimpleName()); }
         try { VoiceRecallRuntime.start(cl); } catch (Throwable t) { T("ARVOICE install-error " + t.getClass().getSimpleName()); }
         try { MediaRecallRuntime.start(cl); } catch (Throwable t) { T("ARMEDIA install-error " + t.getClass().getSimpleName()); }
         try { OriginalImageRuntime.start(cl); } catch (Throwable t) { T("ARORIGINAL install-error " + t.getClass().getSimpleName()); }
         try { VoiceForwardRuntime.start(cl); } catch (Throwable t) { T("ARVF install-error " + t.getClass().getSimpleName()); }
+        try { VoiceTextRuntime.start(cl); } catch (Throwable t) { T("ARVOICETEXT unavailable " + t.getClass().getSimpleName()); }
+        CallToolsRuntime.start(cl);
         try { hookMessageWrites(cl); } catch (Throwable t) { T("msg write hook err " + t); }
         try { hookAddMsg(cl); } catch (Throwable t) { T("addmsg hook err " + t); }
         try { hookSendDebug(cl); } catch (Throwable t) { T("senddbg err " + t); }
@@ -609,6 +612,7 @@ static boolean wxVersionOk(Object actObj) {
         } catch (Throwable t) {}
         try { hookPopupContent(); } catch (Throwable t) {}
         try { hookPopupShow(); } catch (Throwable t) {}
+        try { com.zafiro.wxentry.scancam.ScanCameraRuntime.start(); } catch (Throwable t) { T("SCANCAM install-error " + t.getClass().getSimpleName()); }
         MENU_READY = true;
         T("boot done " + (System.currentTimeMillis() - BOOT_T0) + "ms idx=" + DEX_IDX_SRC);
         // 1.75：+ 面板是独立 PopupWindow，触摸回调会被微信覆盖 —— 改成周期扫描，出现就注入
@@ -5925,78 +5929,34 @@ static boolean wxVersionOk(Object actObj) {
 
     static String localKernelVer() { return BUILD; }
 
-    static int iv(String s) {
-        try { return Integer.parseInt(s.trim()); } catch (Throwable t) { return 0; }
-    }
-
-    /** 刷新菜单顶部那行小字：内核 vX · 服务器 vY（有新版本时提示可点） */
-    /** 1.43：顶部小字前缀 —— 模块版本 + 内核版本 */
     static String verPrefix() {
-        String mv = callMainStr("myVersionName");
-        return "模块 " + (mv == null ? "?" : mv) + " · 内核 v";
+        String module = callMainStr("myVersionName");
+        return "模块 " + (module == null ? "?" : module) + " · 内核 v";
     }
 
-    static void refreshVerLine(final Activity act, final android.widget.TextView tv) {
-        new Thread(new Runnable() {
-            public void run() {
-                final String sv = callMainStr("serverVersion");
-                act.runOnUiThread(new Runnable() {
-                    public void run() {
-                        String lv = localKernelVer();
-                        if (sv == null) { tv.setText(verPrefix() + lv + " · 服务器 查询失败，点此重试"); return; }
-                        if (iv(sv) > iv(lv)) tv.setText(verPrefix() + lv + " → 服务器 v" + sv + "（点此在线升级）");
-                        else tv.setText(verPrefix() + lv + " · 服务器 v" + sv + "（已是最新）");
-                    }
-                });
+    static String updateMenuLabel() {
+        String apk = callMainStr("apkPendingName");
+        if (apk != null) return "模块 APK " + apk + " 可更新";
+        String staged = callMainStr("pendingVersion");
+        return staged == null ? "检查更新" : "内核已下载 · 重启生效";
+    }
+
+    static void openUpdateEntry(final Activity act) {
+        try {
+            Class<?> loader = Class.forName("com.zafiro.wxentry.Main", true, Kernel.class.getClassLoader());
+            loader.getMethod("openUpdateCenter", Activity.class).invoke(null, act);
+        } catch (NoSuchMethodException oldLoader) {
+            String apk = callMainStr("apkPendingName");
+            if (apk != null) {
+                new android.app.AlertDialog.Builder(act).setTitle("模块 APK 可更新")
+                        .setMessage("请先下载并安装模块 " + apk + "，再彻底退出并重新打开微信。")
+                        .setPositiveButton("下载 APK", new android.content.DialogInterface.OnClickListener() {
+                            public void onClick(android.content.DialogInterface d, int which) { doApkInstall(act); }
+                        }).setNegativeButton("稍后", null).show();
+            } else {
+                checkKernelUpdate(act);
             }
-        }).start();
-    }
-
-    /** 点顶部小字：有新版就升级，否则重新查询 */
-    static void onVerLineClick(final Activity act, final android.widget.TextView tv) {
-        String t = String.valueOf(tv.getText());
-        if (t.indexOf("在线升级") >= 0) {
-            new android.app.AlertDialog.Builder(act)
-                    .setTitle("在线升级内核")
-                    .setMessage("将从服务器下载新内核，下载完成后需要重启微信生效。")
-                    .setPositiveButton("升级", new android.content.DialogInterface.OnClickListener() {
-                        public void onClick(android.content.DialogInterface d, int w) { doOnlineUpgrade(act, tv); }
-                    })
-                    .setNegativeButton("取消", null)
-                    .show();
-            return;
-        }
-        tv.setText(verPrefix() + localKernelVer() + " · 服务器 查询中…");
-        refreshVerLine(act, tv);
-    }
-
-    static void doOnlineUpgrade(final Activity act, final android.widget.TextView tv) {
-        toast(act, "正在下载新内核…");
-        new Thread(new Runnable() {
-            public void run() {
-                final String msg = callMainStr("checkUpdateNow");
-                T("online upgrade -> " + msg);
-                act.runOnUiThread(new Runnable() {
-                    public void run() {
-                        refreshVerLine(act, tv);
-                        new android.app.AlertDialog.Builder(act)
-                                .setTitle("在线升级内核")
-                                .setMessage(msg == null ? "升级失败" : msg)
-                                .setPositiveButton("立即重启", new android.content.DialogInterface.OnClickListener() {
-                                    public void onClick(android.content.DialogInterface d, int w) {
-                                        toast(act, "正在重启微信…");
-                                        new Thread(new Runnable() { public void run() {
-                                            try { Thread.sleep(500); } catch (Throwable t) {}
-                                            System.exit(0);
-                                        } }).start();
-                                    }
-                                })
-                                .setNegativeButton("稍后", null)
-                                .show();
-                    }
-                });
-            }
-        }).start();
+        } catch (Exception failure) { toast(act, "暂时无法检查更新"); }
     }
 
     /** v101：钩子全挂时告诉用户「装新版 APK」，别让人一脸茫然 */
@@ -6085,7 +6045,7 @@ static boolean wxVersionOk(Object actObj) {
     enum MenuAction {
         MARK_READ, CLEAR_CHATS, UNFOLLOW_BIZ, RP_GROUPS, RP_TOGGLE, RP_RECEIVE_MODE, RP_SETTINGS, RP_TEMPLATES, RP_HISTORY, RP_DELAY, RP_KEYWORDS, TRANSFER_KEYWORDS, TRANSFER_TOGGLE, TRANSFER_LISTS, TRANSFER_DELAY, ANTI_TOGGLE,
         REALNAME_TOGGLE, ORIGINAL_TOGGLE, NEWROOM_TOGGLE, CHECK_UPDATE, WISH,
-        SNS_TOGGLE, RESTART, DIAGNOSTICS, APK_UPDATE, ACTIVATION, DONATE, TABLET_MODE, TABLET_QR, ORIGINAL_DOWNLOAD, ORIGINAL_LISTS, SNS_FORWARD, SNS_AD_BLOCK, SNS_LOCAL_LIKES, SNS_LOCAL_COMMENTS, SNS_LOCAL_PRESETS, SNS_LOCAL_CLEAR, SNS_SCHEDULE
+        SNS_TOGGLE, RESTART, DIAGNOSTICS, ACTIVATION, DONATE, ANNOUNCEMENTS, SCAN_CAMERA, TABLET_MODE, TABLET_QR, ORIGINAL_DOWNLOAD, ORIGINAL_LISTS, SNS_FORWARD, SNS_AD_BLOCK, SNS_LOCAL_LIKES, SNS_LOCAL_COMMENTS, SNS_LOCAL_PRESETS, SNS_LOCAL_CLEAR, GAME_EMOJI, AUTO_VOICE_TEXT, CALL_TOOLS, SNS_SCHEDULE
     }
     enum MenuCategory {
         CHAT("聊天"), RED_PACKET("红包"), MOMENTS("朋友圈"), ANTI_RECALL("防撤回"), SUPPORT("设置与支持"), EXPERIMENTAL("实验功能");
@@ -6114,11 +6074,11 @@ static boolean wxVersionOk(Object actObj) {
         java.util.ArrayList<MenuEntry> rows = new java.util.ArrayList<MenuEntry>();
         if (category == null) {
             for (MenuCategory page : MenuCategory.values()) {
-                if(page==MenuCategory.EXPERIMENTAL&&!tabletFeatureAvailable())continue;
                 if(page==MenuCategory.MOMENTS&&!momentsPremiumEnabled())continue;
-                rows.add(new MenuEntry(null, page, menuCategoryTitle(page) + "  ›"));
+                rows.add(new MenuEntry(null, page, menuCategoryTitle(page)));
             }
             addMenuAction(rows, MenuAction.DONATE, "打赏");
+            addMenuAction(rows, MenuAction.ANNOUNCEMENTS, "更新公告");
             return rows;
         }
         switch (category) {
@@ -6131,6 +6091,8 @@ static boolean wxVersionOk(Object actObj) {
                 addMenuAction(rows, MenuAction.ORIGINAL_DOWNLOAD, "");
                 addMenuAction(rows, MenuAction.ORIGINAL_LISTS, "原图下载黑白名单（个人 / 群聊）");
                 addMenuAction(rows, MenuAction.NEWROOM_TOGGLE, "");
+                addMenuAction(rows, MenuAction.GAME_EMOJI, "");
+                if (VoiceTextRuntime.available()) addMenuAction(rows, MenuAction.AUTO_VOICE_TEXT, "语音自动转文字");
                 break;
             case RED_PACKET:
                 addMenuAction(rows, MenuAction.RP_TOGGLE, "");
@@ -6157,18 +6119,15 @@ static boolean wxVersionOk(Object actObj) {
                 addMenuAction(rows, MenuAction.SNS_TOGGLE, "");
                 break;
             case EXPERIMENTAL:
+                addMenuAction(rows, MenuAction.SCAN_CAMERA, "模拟相机扫码");
+                if (CallToolsRuntime.available()) addMenuAction(rows, MenuAction.CALL_TOOLS, "去除视频通话限制");
                 if(!tabletFeatureAvailable())break;
                 addMenuAction(rows,MenuAction.TABLET_MODE,"平板模式");
                 addMenuAction(rows,MenuAction.TABLET_QR,"平板扫码登录");
                 break;
             case SUPPORT:
                 addMenuAction(rows, MenuAction.ACTIVATION, "升级/更换激活码");
-                String pending = callMainStr("pendingVersion");
-                addMenuAction(rows, MenuAction.CHECK_UPDATE, pending != null && pending.length() > 0
-                        ? "新版本 v" + pending + "，点此更新" : "检查内核更新");
-                String apk = callMainStr("apkPendingName");
-                if (apk != null && apk.length() > 0)
-                    addMenuAction(rows, MenuAction.APK_UPDATE, "模块 " + apk + " 可更新，点此下载");
+                addMenuAction(rows, MenuAction.CHECK_UPDATE, updateMenuLabel());
                 addMenuAction(rows, MenuAction.WISH, "功能建议");
                 addMenuAction(rows, MenuAction.DIAGNOSTICS, "真名自检（上报日志）");
                 addMenuAction(rows, MenuAction.RESTART, "重启微信");
@@ -6178,7 +6137,8 @@ static boolean wxVersionOk(Object actObj) {
     }
     static int menuPageHeight(Activity act, int rows, MenuCategory category) {
         android.util.DisplayMetrics metrics = act.getResources().getDisplayMetrics();
-        return Math.min((int)(rows * (category==MenuCategory.MOMENTS?72:56) * metrics.density), (int)(metrics.heightPixels * 0.55f));
+        int estimate = SettingsUi.dp(act, Math.max(1, rows) * (category == null ? SettingsUi.ROW_HEIGHT + 6 : 80));
+        return Math.min(estimate, (int) (metrics.heightPixels * 0.48f));
     }
     static void refreshMenuLabel(MenuEntry item) {
         switch (item.action) {
@@ -6196,6 +6156,7 @@ static boolean wxVersionOk(Object actObj) {
             case ORIGINAL_DOWNLOAD: item.label = "自动下载原图"; break;
             case NEWROOM_TOGGLE: item.label = "新群免打扰"; break;
             case SNS_TOGGLE: item.label = "朋友圈防撤回"; break;
+            case GAME_EMOJI:item.label="随机表情控制";break;
             case SNS_FORWARD: item.label="朋友圈一键转发";break;
             case SNS_AD_BLOCK: item.label="朋友圈去广告";break;
             case SNS_LOCAL_LIKES:item.label="朋友圈伪集赞";break;
@@ -6203,8 +6164,9 @@ static boolean wxVersionOk(Object actObj) {
             default: break;
         }
     }
-    static void performMenuAction(final Activity act, MenuEntry item, final android.widget.TextView tVer, final Runnable refresh) {
+    static void performMenuAction(final Activity act, MenuEntry item, final Runnable refresh) {
         switch (item.action) {
+            case GAME_EMOJI:GameEmojiStore.setEnabled(!GameEmojiStore.enabled());break;
             case MARK_READ: new Kernel().markAllRead(act); break;
             case CLEAR_CHATS: showChatCleaner(act); break;
             case UNFOLLOW_BIZ: showBizPicker(act); break;
@@ -6246,17 +6208,18 @@ static boolean wxVersionOk(Object actObj) {
             case SNS_LOCAL_PRESETS:SnsLocalSettings.presets(act);break;
             case SNS_LOCAL_CLEAR:SnsLocalSettings.clear(act);break;
             case SNS_SCHEDULE:SnsScheduleUi.show(act);break;
-            case CHECK_UPDATE:
-                checkKernelUpdate(act);
-                refreshVerLine(act, tVer);
-                break;
+            case CHECK_UPDATE: openUpdateEntry(act); break;
             case DONATE: openDonation(act); break;
+            case ANNOUNCEMENTS:
+                FeatureMenuUi.showAnnouncements(act, new java.util.concurrent.Callable<String>() {
+                    public String call() { return callMainStr("kernelAnnouncements"); }
+                });
+                break;
             case TABLET_MODE: break;
             case TABLET_QR: callTabletUi(act,"openTabletQr");break;
             case WISH: showWishDialog(act); break;
             case DIAGNOSTICS: rnSelfCheck(act); break;
             case RESTART: restartWeChat(act); break;
-            case APK_UPDATE: doApkInstall(act); break;
             case ACTIVATION:
                 try {
                     Class<?> loader = Class.forName("com.zafiro.wxentry.Main", true, Kernel.class.getClassLoader());
@@ -6291,11 +6254,23 @@ static boolean wxVersionOk(Object actObj) {
             case SNS_AD_BLOCK:return snsAdBlockEnabled();
             case SNS_LOCAL_LIKES:return SnsLocalStore.enabled(SnsLocalData.Feature.LIKES);
             case SNS_LOCAL_COMMENTS:return SnsLocalStore.enabled(SnsLocalData.Feature.COMMENTS);
+            case GAME_EMOJI:return GameEmojiStore.enabled();
+            case AUTO_VOICE_TEXT:return VoiceTextRuntime.enabled();
+            case CALL_TOOLS:return CallToolsRuntime.enabled();
+            case SCAN_CAMERA:return com.zafiro.wxentry.scancam.ScanCameraRuntime.enabled();
             case TABLET_MODE:return "1".equals(callMainStr("tabletModeConfigured"));
             default:return null;
         }
     }
-    static boolean setMenuToggle(Activity act,MenuEntry row,boolean on,android.widget.TextView version,Runnable refresh) {
+    static boolean setMenuToggle(Activity act,MenuEntry row,boolean on) {
+        if (row.action == MenuAction.SCAN_CAMERA) {
+            boolean saved = com.zafiro.wxentry.scancam.ScanCameraRuntime.setEnabled(on);
+            if (saved != on) toast(act, "模拟相机扫码设置保存失败");
+            return saved;
+        }
+        if(row.action==MenuAction.GAME_EMOJI)return GameEmojiStore.setEnabled(on);
+        if (row.action == MenuAction.AUTO_VOICE_TEXT) return VoiceTextRuntime.setEnabled(act, on);
+        if (row.action == MenuAction.CALL_TOOLS) return CallToolsRuntime.setEnabled(act, on);
         if(row.action==MenuAction.TABLET_MODE) {
             if(!tabletFeatureAvailable()){toast(act,"平板模式仅限高级版和 VIP 版，请升级内核并安装模块 APK 1.97");return false;}
             try {
@@ -6309,7 +6284,7 @@ static boolean wxVersionOk(Object actObj) {
         if(row.action==MenuAction.SNS_LOCAL_COMMENTS)return SnsLocalSettings.toggle(act,SnsLocalData.Feature.COMMENTS,on);
         if(row.action==MenuAction.RP_DELAY)return ReceiptSettings.setDelayEnabled(act,ReceiptConfig.Feature.RED_PACKET,on,null);
         if(row.action==MenuAction.TRANSFER_DELAY)return ReceiptSettings.setDelayEnabled(act,ReceiptConfig.Feature.TRANSFER,on,null);
-        if(menuToggleValue(row)!=null && menuToggleValue(row).booleanValue()!=on)performMenuAction(act,row,version,null);
+        if(menuToggleValue(row)!=null && menuToggleValue(row).booleanValue()!=on)performMenuAction(act,row,null);
         return Boolean.TRUE.equals(menuToggleValue(row));
     }
 
@@ -6320,109 +6295,94 @@ static boolean wxVersionOk(Object actObj) {
             final MenuCategory[] page = new MenuCategory[] { null };
             final java.util.ArrayList<MenuEntry> items = menuPageEntries(null);
 
-            final android.widget.LinearLayout head = new android.widget.LinearLayout(act);
-            head.setOrientation(android.widget.LinearLayout.VERTICAL);
-            int dpad = (int) (16 * act.getResources().getDisplayMetrics().density);
-            head.setPadding(dpad, dpad, dpad, 0);
-            final android.widget.TextView tTitle = new android.widget.TextView(act);
-            tTitle.setText("模块设置");
-            tTitle.setTextSize(18);
+            final android.widget.LinearLayout head = FeatureMenuUi.column(act);
+            FeatureMenuUi.pad(head, 16, 12);
+            final android.widget.TextView tTitle = FeatureMenuUi.text(act, "模块设置", 23, FeatureMenuUi.INK);
+            tTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             head.addView(tTitle);
-            final android.widget.TextView tVer = new android.widget.TextView(act);
-            tVer.setTextSize(12);
-            tVer.setTextColor(0xFF888888);
-            tVer.setPadding(0, (int) (6 * act.getResources().getDisplayMetrics().density), 0, 0);
-            tVer.setText(verPrefix() + localKernelVer() + " · 服务器 查询中…");
-            tVer.setOnClickListener(new android.view.View.OnClickListener() {
-                public void onClick(android.view.View v) { onVerLineClick(act, tVer); }
-            });
+            final android.widget.TextView tVer = FeatureMenuUi.text(act,
+                    verPrefix() + localKernelVer() + " · " + editionLabel(), 12, FeatureMenuUi.MUTED);
             head.addView(tVer);
-            refreshVerLine(act, tVer);
-            try {
-                if (SERVER_TIER == null || SERVER_TIER.length() == 0) SERVER_TIER = "免费版";
-                android.widget.TextView tT = new android.widget.TextView(act);
-                tT.setTextSize(12);
-                tT.setTextColor(0xFF1565C0);
-                tT.setPadding(0, (int) (6 * act.getResources().getDisplayMetrics().density), 0, 0);
-                tT.setText("当前版本：" + editionLabel());
-                head.addView(tT);
-            } catch (Throwable t) {}
-            try {
-                if (SERVER_REPLY != null && SERVER_REPLY.length() > 0) {
-                    android.widget.TextView tR = new android.widget.TextView(act);
-                    tR.setTextSize(12);
-                    tR.setTextColor(0xFF2E7D32);
-                    tR.setPadding(0, (int) (8 * act.getResources().getDisplayMetrics().density), 0, 0);
-                    tR.setText("官方回复：" + SERVER_REPLY);
-                    head.addView(tR);
-                }
-            } catch (Throwable t) {}
+            final android.widget.TextView update = FeatureMenuUi.text(act, updateMenuLabel(), 14, FeatureMenuUi.ROSE);
+            update.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            update.setMinHeight(SettingsUi.dp(act, 44));
+            update.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            update.setOnClickListener(new android.view.View.OnClickListener() {
+                public void onClick(android.view.View v) { openUpdateEntry(act); }
+            });
+            FeatureMenuUi.card(update, true, true);
+            FeatureMenuUi.pad(update, 12, 4);
+            android.widget.LinearLayout.LayoutParams updateParams = new android.widget.LinearLayout.LayoutParams(-1, -2);
+            updateParams.topMargin = SettingsUi.dp(act, 8);
+            head.addView(update, updateParams);
+            if (SERVER_REPLY != null && !SERVER_REPLY.isEmpty()) {
+                android.widget.TextView reply = FeatureMenuUi.text(act, "官方回复：" + SERVER_REPLY, 12, FeatureMenuUi.MUTED);
+                reply.setMaxLines(2);
+                reply.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                reply.setPadding(0, SettingsUi.dp(act, 6), 0, 0);
+                head.addView(reply);
+            }
 
-            int simpleItem = 0;
-            try {
-                simpleItem = ((Integer) XposedHelpers.callMethod(act.getResources(), "getIdentifier",
-                        "simple_list_item_1", "layout", "android")).intValue();
-            } catch (Throwable t) {}
-            if (simpleItem == 0) simpleItem = 0x01090043;   // android.R.layout.simple_list_item_1
             final Runnable[] renderMenu=new Runnable[1];
             final android.widget.ArrayAdapter<MenuEntry> listAd =
-                    new android.widget.ArrayAdapter<MenuEntry>(act, simpleItem, items) {
+                    new android.widget.ArrayAdapter<MenuEntry>(act, android.R.layout.simple_list_item_1, items) {
                         public boolean areAllItemsEnabled() { return true; }
                         public boolean isEnabled(int position) { return true; }
                         public android.view.View getView(int position, android.view.View reusable, android.view.ViewGroup parent) {
                             final MenuEntry entry=getItem(position);refreshMenuLabelSafe(entry);
                             Boolean checked=menuToggleValue(entry);
                             if(checked!=null) {
-                                String detail=entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TRANSFER_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.TRANSFER):entry.action==MenuAction.TABLET_MODE?"开启或关闭后需重启微信，登录页生效":entry.action==MenuAction.SNS_FORWARD?"长按目标进入发表页，需手动发表":entry.action==MenuAction.SNS_AD_BLOCK?"过滤微信广告，刷新朋友圈生效":entry.action==MenuAction.SNS_LOCAL_LIKES?"长按文案选择好友，仅本机展示":entry.action==MenuAction.SNS_LOCAL_COMMENTS?"长按文案添加评论，仅本机展示":entry.action==MenuAction.ORIGINAL_DOWNLOAD?"收到或打开图片时按名单下载可用原图，独立于防撤回":"";
-                                SettingsUi.ToggleRow row=SettingsUi.toggle(act,entry.label,detail,checked.booleanValue(),new SettingsUi.Change() {
-                                    public boolean set(boolean on) { boolean saved=setMenuToggle(act,entry,on,tVer,renderMenu[0]);notifyDataSetChanged();return saved; }
+                                String detail=entry.action==MenuAction.SCAN_CAMERA?"不支持长按识别":entry.action==MenuAction.CALL_TOOLS?"语音或视频通话中可听聊天语音、看视频和扫一扫":entry.action==MenuAction.AUTO_VOICE_TEXT?"进入会话时补转已加载的语音，收到新语音时逐条转写":entry.action==MenuAction.GAME_EMOJI?"长按骰子 / 猜拳设置默认结果及后续序列":entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TRANSFER_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.TRANSFER):entry.action==MenuAction.TABLET_MODE?"开启或关闭后需重启微信，登录页生效":entry.action==MenuAction.SNS_FORWARD?"长按目标进入发表页，需手动发表":entry.action==MenuAction.SNS_AD_BLOCK?"过滤微信广告，刷新朋友圈生效":entry.action==MenuAction.SNS_LOCAL_LIKES?"长按文案选择好友，仅本机展示":entry.action==MenuAction.SNS_LOCAL_COMMENTS?"长按文案添加评论，仅本机展示":entry.action==MenuAction.ORIGINAL_DOWNLOAD?"收到或打开图片时按名单下载可用原图，独立于防撤回":"";
+                                SettingsUi.ToggleRow row=FeatureMenuUi.toggle(act,entry.label,detail,checked.booleanValue(),new SettingsUi.Change() {
+                                    public boolean set(boolean on) { return setMenuToggle(act,entry,on); }
                                 });
-                                int pad=SettingsUi.dp(act,16);row.setPadding(pad,SettingsUi.dp(act,8),pad,SettingsUi.dp(act,8));
                                 if(entry.action==MenuAction.RP_DELAY||entry.action==MenuAction.TRANSFER_DELAY)row.setOnClickListener(new android.view.View.OnClickListener() {
-                                    public void onClick(android.view.View v) { performMenuAction(act,entry,tVer,renderMenu[0]); }
+                                    public void onClick(android.view.View v) { performMenuAction(act,entry,renderMenu[0]); }
                                 });
                                 return row;
                             }
-                            android.widget.TextView text=SettingsUi.text(act,entry.label,entry.category!=null?17:16);
-                            text.setTypeface(entry.category!=null?android.graphics.Typeface.DEFAULT_BOLD:android.graphics.Typeface.DEFAULT);
-                            text.setMinimumHeight(SettingsUi.dp(act,56));text.setGravity(android.view.Gravity.CENTER_VERTICAL);
-                            int pad=SettingsUi.dp(act,16);text.setPadding(pad,SettingsUi.dp(act,12),pad,SettingsUi.dp(act,12));
-                            android.view.View view=text;
-                            return view;
+                            String label = entry.category == null
+                                    ? (entry.action == MenuAction.CHECK_UPDATE ? updateMenuLabel() : entry.label)
+                                    : menuCategoryTitle(entry.category);
+                            return FeatureMenuUi.row(act, label, entry.category != null,
+                                    entry.action == MenuAction.CHECK_UPDATE && callMainStr("apkPendingName") != null);
                         }
                     };
             final android.widget.ListView lv = new android.widget.ListView(act);
             lv.setAdapter(listAd);
+            lv.setDivider(new android.graphics.drawable.ColorDrawable(FeatureMenuUi.SURFACE));
+            lv.setDividerHeight(SettingsUi.dp(act, 6));
+            lv.setVerticalScrollBarEnabled(true);
+            lv.setScrollbarFadingEnabled(false);
+            lv.setSelector(android.R.color.transparent);
+            lv.setPadding(SettingsUi.dp(act, 16), 0, SettingsUi.dp(act, 16), 0);
 
-            final android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(act);
-            boolean custom = false;
-            try {
-                java.lang.reflect.Method sm = android.app.AlertDialog.Builder.class
-                        .getMethod("setCustomTitle", android.view.View.class);
-                sm.invoke(builder, head);
-                custom = true;
-            } catch (Throwable t) { T("custom title fail " + t); }
-            if (!custom) builder.setTitle("模块设置");
-            final boolean customTitleUsed = custom;
+            final android.widget.TextView hint = FeatureMenuUi.text(act, "", 12, FeatureMenuUi.ROSE);
+            FeatureMenuUi.wireScrollHint(lv, hint);
+            android.widget.LinearLayout box = FeatureMenuUi.column(act);
+            box.addView(head);
+            box.addView(lv, new android.widget.LinearLayout.LayoutParams(-1, menuPageHeight(act, items.size(), page[0])));
+            box.addView(hint, new android.widget.LinearLayout.LayoutParams(-1, -2));
 
-            android.widget.LinearLayout box = new android.widget.LinearLayout(act);
-            box.setOrientation(android.widget.LinearLayout.VERTICAL);
-            box.addView(lv, new android.view.ViewGroup.LayoutParams(
-                    -1, menuPageHeight(act, items.size(), page[0])));
-
-            final android.app.AlertDialog dlg = builder.setView(box)
-                    .setNegativeButton("\u5173\u95ed", null).create();
+            final android.app.AlertDialog dlg = new android.app.AlertDialog.Builder(act).setView(box)
+                    .setNegativeButton("关闭", null).create();
+            final MenuCategory[] rendered = new MenuCategory[] { null };
             final Runnable renderPage = new Runnable() {
                 public void run() {
+                    boolean samePage = rendered[0] == page[0];
+                    int position = samePage ? lv.getFirstVisiblePosition() : 0;
+                    android.view.View first = samePage ? lv.getChildAt(0) : null;
+                    int offset = first == null ? 0 : first.getTop();
                     items.clear();
                     items.addAll(menuPageEntries(page[0]));
-                    tTitle.setText(page[0] == null ? "模块设置" : menuCategoryTitle(page[0]));
-                    if (!customTitleUsed) dlg.setTitle(page[0] == null ? "模块设置" : menuCategoryTitle(page[0]));
+                    rendered[0] = page[0];
+                    tTitle.setText(menuCategoryTitle(page[0]));
+                    update.setText(updateMenuLabel());
                     listAd.notifyDataSetChanged();
                     android.view.ViewGroup.LayoutParams params = lv.getLayoutParams();
                     params.height = menuPageHeight(act, items.size(), page[0]);
                     lv.setLayoutParams(params);
-                    lv.setSelection(0);
+                    lv.setSelectionFromTop(position, offset);
                     android.widget.Button back = dlg.getButton(android.content.DialogInterface.BUTTON_NEGATIVE);
                     if (back != null) back.setText(page[0] == null ? "关闭" : "返回");
                     T("feature menu page=" + (page[0] == null ? "root" : page[0].name()));
@@ -6439,10 +6399,9 @@ static boolean wxVersionOk(Object actObj) {
                             page[0] = row.category;
                             renderPage.run();
                         } else if (row.action != null) {
-                            performMenuAction(act, row, tVer, renderPage);
+                            performMenuAction(act, row, renderPage);
                             listAd.notifyDataSetChanged();
                             tTitle.setText(menuCategoryTitle(page[0]));
-                            if (!customTitleUsed) dlg.setTitle(menuCategoryTitle(page[0]));
                         }
                     } catch (Throwable t) { T("menu item err " + t); }
                 }
@@ -6464,6 +6423,14 @@ static boolean wxVersionOk(Object actObj) {
                 }
             });
             dlg.show();
+            FeatureMenuUi.styleDialog(dlg);
+            lv.getViewTreeObserver().addOnWindowFocusChangeListener(new android.view.ViewTreeObserver.OnWindowFocusChangeListener() {
+                public void onWindowFocusChanged(boolean focused) {
+                    if (!focused) return;
+                    update.setText(updateMenuLabel());
+                    if (page[0] == MenuCategory.SUPPORT) listAd.notifyDataSetChanged();
+                }
+            });
             dlg.getButton(android.content.DialogInterface.BUTTON_NEGATIVE).setOnClickListener(new android.view.View.OnClickListener() {
                 public void onClick(android.view.View view) {
                     if (page[0] == null) dlg.dismiss();
@@ -6620,7 +6587,7 @@ static boolean wxVersionOk(Object actObj) {
                         public void run() {
                             try {
                                 new android.app.AlertDialog.Builder(act)
-                                        .setTitle("\u68c0\u67e5\u5185\u6838\u66f4\u65b0")
+                                        .setTitle("检查更新")
                                         .setMessage(m2)
                                         .setPositiveButton("\u77e5\u9053\u4e86", null)
                                         .show();
@@ -7060,28 +7027,6 @@ static boolean wxVersionOk(Object actObj) {
                     msg = "下载失败：" + cc;
                 }
                 T("apk download -> " + msg);
-                toastMain(msg);
-            }
-        }).start();
-    }
-
-    static void doInstall(final Activity act) {
-        toast(act, "正在下载更新…");
-        new Thread(new Runnable() {
-            public void run() {
-                String msg;
-                try {
-                    Class<?> c = Class.forName("com.zafiro.wxentry.Main", true, Kernel.class.getClassLoader());
-                    java.lang.reflect.Method m = c.getDeclaredMethod("installUpdate");
-                    m.setAccessible(true);
-                    Object r = m.invoke(null);
-                    msg = r == null ? "更新失败" : r.toString();
-                } catch (Throwable t) {
-                    Throwable cc = t;
-                    while (cc.getCause() != null) cc = cc.getCause();
-                    msg = "更新失败：" + cc;
-                }
-                T("banner install -> " + msg);
                 toastMain(msg);
             }
         }).start();

@@ -1,9 +1,15 @@
 """Build the canonical-rewrite loader; no deployment or device operations."""
 from pathlib import Path
-import sys,subprocess,zipfile,hashlib,json,uuid,os
+import sys,subprocess,zipfile,hashlib,json,uuid,os,re,argparse
 R=Path(__file__).resolve().parents[1];W=R.parent
-JAVA=Path(r'C:\Users\Q\Documents\Codex\2026-10-22\ban\work\toolchain\jdk\jdk-17.0.20.1+1\bin')
-LIB=W/'tools/libs';OUT=R/'build-loader'/('run-'+uuid.uuid4().hex[:10]);OUT.mkdir(parents=True)
+default_java=Path(r'C:\Users\Q\Documents\Codex\2026-10-22\ban\work\toolchain\jdk\jdk-17.0.20.1+1\bin')
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--java-bin',type=Path,default=default_java)
+parser.add_argument('--libs',type=Path,default=W/'tools/libs')
+args=parser.parse_args()
+JAVA=args.java_bin
+LIB=args.libs
+OUT=R/'build-loader'/('run-'+uuid.uuid4().hex[:10]);OUT.mkdir(parents=True)
 sys.stdout.reconfigure(encoding='utf-8')
 def run(args):
  p=subprocess.run([str(a) for a in args],capture_output=True,timeout=180)
@@ -40,5 +46,8 @@ build=json.loads((R/'build-local/result.json').read_text(encoding='utf-8'))
 check=run([JAVA/'java.exe','-Dwxentry.runtime.jar='+str(optimized),'-cp',os.pathsep.join(map(str,[tests,classes,LIB/'jadx-all.jar'])),'FrameworkDexOrderTest',*[build['editions'][e]['dex'] for e in ['free','plus','vip']]])
 run([JAVA/'javac.exe','-J-Duser.language=en','-encoding','UTF-8','-cp',LIB/'jadx-all.jar','-d',tests,R/'tests/DexRuntimeEnumContractTest.java'])
 enum_check=run([JAVA/'java.exe','-cp',str(tests)+os.pathsep+str(LIB/'jadx-all.jar'),'DexRuntimeEnumContractTest',dex/'classes.dex'])
-report={'versionCode':117,'versionName':'2.17','loader_dex':str(dex/'classes.dex'),'sha256':hashlib.sha256((dex/'classes.dex').read_bytes()).hexdigest(),'bytes':(dex/'classes.dex').stat().st_size,'checks':check,'enum_contracts':enum_check,'optimized_runtime_tested':True,'signed_cache_input_immutable':True,'runtime_dependency_source_sha256':hashlib.sha256((LIB/'jadx-all.jar').read_bytes()).hexdigest(),'single_dex':True,'phone_tested':False}
+main=(R/'loader/Main.java').read_text(encoding='utf-8')
+version_code=int(re.search(r'MY_VC\s*=\s*(\d+)', main).group(1))
+version_name=re.search(r'MY_VN\s*=\s*"([^"]+)"', main).group(1)
+report={'versionCode':version_code,'versionName':version_name,'loader_dex':str(dex/'classes.dex'),'sha256':hashlib.sha256((dex/'classes.dex').read_bytes()).hexdigest(),'bytes':(dex/'classes.dex').stat().st_size,'checks':check,'enum_contracts':enum_check,'optimized_runtime_tested':True,'signed_cache_input_immutable':True,'runtime_dependency_source_sha256':hashlib.sha256((LIB/'jadx-all.jar').read_bytes()).hexdigest(),'single_dex':True,'phone_tested':False}
 (R/'build-loader/result.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8');print(json.dumps(report,indent=2))

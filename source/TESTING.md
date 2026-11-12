@@ -1,52 +1,5 @@
-# v260 验证
+# 候选版验证
 
-- PASS 29 voice callback behavior checks
-- PASS 45 voice forwarding behavior checks
-- PASS 37 modern voice file/submission checks
-- PASS 16 voice marker layout/recycling checks
-- PASS 74 batch timing/progress/cancellation checks
-- PASS 19 conversation eligibility/filter checks
-- PASS 23 right-side switch/binding/theme checks
-- PASS 42 inline recall metadata/following-message regression checks
-- PASS 56 inline recall binding/recycling/persistence display checks
-- PASS 20 plus popup presence, reuse, and transactional recovery checks
-- PASS 30 early tablet mode, atomic persistence, isolation and disable checks
-- PASS 9 explicit restart scheduling/fallback/termination checks
-- PASS 15 signed paid tablet entitlement, downgrade and tampering checks
-- PASS 35 media cache expiry, retention, restore, identity and independent original policy checks
-- PASS 31 native media interception, original mode, queued list/owner and failure behavior checks
-- PASS 459 scheduled Moments timer, manual recovery, durable claims, owner/media codec and duplicate guards
-- PASS 32 scheduled Moments account/VIP isolation, fsynced atomic failure, crash recovery and single-submit store checks
-- PASS 41 private idle alarm, VIP/account/queue gates, bounded screen-off CPU lock, stale cancellation and release checks
-- PASS 49 local Moments codec, immutable edits, identity and bounded retention checks
-- PASS 43 local Moments account isolation, paid grants, atomic failure, corrupt recovery and size cleanup checks
-- PASS 67 all-friend and random-count selection, uniqueness, range and non-mutating checks
-- PASS 35 Moments switch/account/entitlement and native ad-page filtering checks
-- PASS 59 SNS draft eligibility, native editor extras, cancellation, account and owned-file behavior checks
-- True
-- PASS 89 premium entitlement and exclusive mode checks
-- PASS 110 red packet state/ownership/template checks
-- PASS 49 native red packet callback/submission checks
-- PASS 20 red packet late-boot context and native launch delegation checks
-- PASS 22 native red packet source, envelope and entry delegation checks
-- PASS 105 red packet settings/persistence/reply-flow checks
-- PASS 44 receipt list/seconds/migration checks
-- PASS 51 transfer parser/native/receipt-flow checks
-- PASS 51 VIP keyword parsing, exclusive rules, isolation, deferred receipt and confirmation checks
-- PASS 41 native voice menu/file/task/result contracts
-- PASS 44 native red packet request/result/text contracts
-- PASS 52 native transfer and manual red packet UI contracts
-- PASS 50 native recall allocator and inline row/text/identity contracts
-- PASS 23 native tablet/login/QR contracts
-- PASS 57 native video/file revoke, download, path and original image contracts
-- PASS 91 native SNS long-press, source, downloads and composer contracts
-- PASS 6 native Moments merged-page and advertising marker contracts
-- PASS 37 native complete red packet entry, page selector and application route contracts
-- PASS 35 native local Moments post binding, view pooling, avatar and profile contracts
-- PASS 45 native scheduled text/photo builder, visibility, ordered ingestion, commit and result contracts
-
-- 2288 项行为 / 原生接口检查通过。
-- 2.05、2.07、2.09、2.11、2.13、2.15、2.17 加载器各通过 168 项新内核 DEX 兼容检查；最终 APK DEX 通过 81 项枚举契约检查。
-- 6 项真实签名升级 / 前向回退检查通过。
-- 真机最终字节与发布内核摘要一致。原生未读数 2 → 0，首页红点清空，返回 / 空列表重进 / 深浅色 / 无重复按钮均通过。原设置、VIP 和充电亮屏保持。
-- 未分别切换免费 / 高级授权做真机测试；未重复进行真实红包、转账或定时发表操作。
+- 三版内核编译、既有回归、DEX 版别校验、加载器 DEX 校验、APK 打包校验和服务端测试均在本地运行。
+- 服务端新增验证覆盖公告排序、空公告、损坏文件、旧 APK 下载拦截以及新版 APK 的授权通道选择。
+- 待在 Android 真机确认菜单的开关对齐、点击与拖动、模拟相机扫码的设置保存、滑动提示、APK 下载和覆盖安装、重开微信后自动下载，以及内核生效后的公告展示。需要原 APK 签名和已部署的测试服务端。

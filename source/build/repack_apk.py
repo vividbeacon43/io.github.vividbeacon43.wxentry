@@ -1,60 +1,139 @@
-"""Sign 2.17 using the original certificate and prepare a forward-version APK rollback."""
+"""Build an aligned, unsigned WXEntry APK from an official module APK."""
 from pathlib import Path
-import ast,struct,subprocess,json,zipfile,hashlib,re,sys,uuid,urllib.request
-R=Path(__file__).resolve().parents[1];W=R.parent;OLD=Path(r'C:\Users\Q\Documents\Codex\2026-11-03\new-chat\work')
-JAVA=Path(r'C:\Users\Q\Documents\Codex\2026-10-22\ban\work\toolchain\jdk\jdk-17.0.20.1+1\bin')
-BT=Path(r'C:\Users\Q\Documents\Codex\2026-10-22\ban\work\toolchain\build-tools\android-15')
-OUT=R/'build-apk'/('run-'+uuid.uuid4().hex[:10]);OUT.mkdir(parents=True);OUTPUTS=W.parent/'outputs'
-sys.stdout.reconfigure(encoding='utf-8')
-sha=lambda b:hashlib.sha256(b).hexdigest()
-def run(args,stage):
- p=subprocess.run([str(a) for a in args],stdin=subprocess.DEVNULL,capture_output=True,timeout=180)
- if p.returncode:
-  (OUT/(stage+'-private-error.log')).write_bytes(p.stdout+p.stderr);raise RuntimeError(stage+' failed; private diagnostic saved')
- return p.stdout.decode('utf-8','replace')
-baseline_dir=Path(json.loads((OLD/'voice-recall-fix/latest.json').read_text(encoding="utf-8"))['snapshot']);baseline=baseline_dir/'wxentry.apk'
-summary=json.loads((baseline_dir/'summary.json').read_text(encoding="utf-8"))['files'];assert sha(baseline.read_bytes())==summary['wxentry.apk']['sha256']
-signing=OLD/'signing-tool-private/wxentry-sign-tool'
-for line in (signing/'SHA256SUMS').read_text(encoding="utf-8").splitlines():
- if not line.strip():continue
- digest,name=line.split(None,1);path=(signing/name.lstrip('*').strip()).resolve();assert path.is_relative_to(signing.resolve()) and sha(path.read_bytes())==digest
-expected=re.search(r'EXPECTED_SIG\s*=\s*"([a-f0-9]+)"',(R/'loader/Main.java').read_text(encoding='utf-8')).group(1)
-cert=run([JAVA/'java.exe','-jar',BT/'lib/apksigner.jar','verify','--print-certs',baseline],'baseline-cert')
-assert re.search('certificate SHA-256 digest: '+expected,cert)
-alias=re.search(r'--ks-key-alias\s+[\'"]?([A-Za-z0-9_.-]+)',(signing/'sign_apk.sh').read_text(encoding="utf-8")).group(1)
-source=ast.parse((OLD/'wxentry-hotupdate-v194/build/repack_apk.py').read_text(encoding='utf-8'))
-function=next(n for n in source.body if isinstance(n,ast.FunctionDef) and n.name=='patch_manifest')
-patch=ast.unparse(function).replace('def patch_manifest(raw):','def patch_manifest(raw,version_code,version_name):').replace('value != 84','value != 88').replace("attr + 16, 85)","attr + 16, version_code)").replace("('1.84', '1.85')","('1.88', version_name)").replace("'1.85'.encode(codec)","version_name.encode(codec)")
-assert 'version_code)' in patch and 'version_name.encode' in patch
-exec(compile(patch,'manifest-patcher','exec'),globals())
-build=json.loads((R/'build-local/result.json').read_text(encoding="utf-8"));loader=json.loads((R/'build-loader/result.json').read_text(encoding="utf-8"))
-# Forward-version rollback uses the exact stable loader logic (2.15) with 2.18 version fields.
-rollback_loader=json.loads((W/'rollback-loader218/build-loader/result.json').read_text(encoding="utf-8"))
-old_build=json.loads((W/'wxentry-v256/build-local/result.json').read_text(encoding="utf-8"))
-keypass=OUT/'key-password-private.txt';keypass.write_bytes((signing/'pass.txt').read_bytes())
-try:
- reports={}
- for version,name,ld,kernel in [(117,'2.17',Path(loader['loader_dex']),Path(build['editions']['free']['dex'])),(118,'2.18',Path(rollback_loader['loader_dex']),Path(old_build['editions']['free']['dex']))]:
-  raw=OUT/(name+'-raw.apk');aligned=OUT/(name+'-unsigned.apk');signed=OUTPUTS/('wxentry-'+name+('-scheduled-moments.apk' if version==117 else '-rollback-v256.apk'))
-  with zipfile.ZipFile(baseline) as src,zipfile.ZipFile(raw,'w',zipfile.ZIP_DEFLATED) as dst:
-   for info in src.infolist():
-    if info.filename.startswith('META-INF/') or re.fullmatch(r'classes[0-9]*\.dex',info.filename):continue
-    data=src.read(info.filename)
-    if info.filename=='AndroidManifest.xml':data=patch_manifest(data,version,name)
-    dst.writestr(info,data)
-   dst.write(ld,'classes.dex');dst.write(kernel,'classes2.dex')
-   if version in [117,118]:
-    with zipfile.ZipFile(W/'tools/libs/jadx-all.jar') as deps:dst.writestr('assets/third-party/Apache-2.0.txt',deps.read('META-INF/LICENSE'))
-    dst.write(R/'licenses/smali-NOTICE.txt','assets/third-party/smali-NOTICE.txt')
-    dst.writestr('assets/third-party/NOTICE.txt','Includes a minimized dexlib2 (Google smali, BSD 3-Clause) and Guava (Google, Apache 2.0) for rewriting runtime DEX indexes.\nSources: https://github.com/google/smali and https://github.com/google/guava\n')
-  run([BT/'zipalign.exe','-f','-p','4',raw,aligned],'zipalign-'+name)
-  run([JAVA/'java.exe','-jar',BT/'lib/apksigner.jar','sign','--ks',signing/'wxentry2.jks','--ks-pass','file:'+str(signing/'pass.txt'),'--key-pass','file:'+str(keypass),'--ks-key-alias',alias,'--v1-signing-enabled','true','--v2-signing-enabled','true','--v3-signing-enabled','true','--out',signed,aligned],'sign-'+name)
-  verify=run([JAVA/'java.exe','-jar',BT/'lib/apksigner.jar','verify','--min-sdk-version','21','--verbose','--print-certs',signed],'verify-'+name)
-  assert re.search('certificate SHA-256 digest: '+expected,verify)
-  for scheme in ['v1','v2','v3']:assert re.search('Verified using '+scheme+r' scheme[^\r\n]*:\s*true',verify)
-  run([BT/'zipalign.exe','-c','-p','4',signed],'check-align-'+name)
-  badging=run([BT/'aapt.exe','dump','badging',signed],'manifest-'+name).splitlines()[0];assert "versionCode='"+str(version)+"'" in badging and "versionName='"+name+"'" in badging
-  with zipfile.ZipFile(signed) as z:assert z.testzip() is None;assert z.read('classes.dex')==ld.read_bytes() and z.read('classes2.dex')==kernel.read_bytes()
-  reports[name]={'file':str(signed),'versionCode':version,'versionName':name,'sha256':sha(signed.read_bytes()),'bytes':signed.stat().st_size,'same_signer':True,'v1_v2_v3_verified':True,'loader_sha256':sha(ld.read_bytes()),'embedded_free_sha256':sha(kernel.read_bytes()),'phone_tested':False}
- (R/'build-apk/result.json').write_text(json.dumps(reports,indent=2)+'\n',encoding='utf-8');print(json.dumps(reports,indent=2))
-finally:keypass.unlink(missing_ok=True)
+import argparse
+import json
+import re
+import struct
+import subprocess
+import tempfile
+import zipfile
+
+
+def patch_manifest(raw, base_code, base_name, new_code, new_name):
+    data=bytearray(raw)
+    if struct.unpack_from('<H',data,0)[0]!=3:raise ValueError('Not Android binary XML')
+    pool=None;chunks=[];position=struct.unpack_from('<H',data,2)[0]
+    while position<len(data):
+        kind,header,size=struct.unpack_from('<HHI',data,position)
+        if size<header or position+size>len(data):raise ValueError('Invalid XML chunk')
+        chunks.append((position,kind))
+        if kind==1:pool=(position,header)
+        position+=size
+    if pool is None:raise ValueError('Missing string pool')
+    start,header=pool
+    count,styles,flags,string_start=struct.unpack_from('<IIII',data,start+8)
+    utf8=bool(flags&256)
+    def length(at,short):
+        if short:
+            value=struct.unpack_from('<H',data,at)[0]
+            if value&0x8000:return ((value&0x7fff)<<16)|struct.unpack_from('<H',data,at+2)[0],at+4
+            return value,at+2
+        value=data[at]
+        if value&128:return ((value&127)<<8)|data[at+1],at+2
+        return value,at+1
+    def read(index):
+        if not 0<=index<count:raise ValueError('Invalid XML string index')
+        offset=struct.unpack_from('<I',data,start+header+index*4)[0]
+        at=start+string_start+offset
+        units,at=length(at,not utf8)
+        if utf8:
+            size,at=length(at,False);codec='utf-8'
+        else:size=units*2;codec='utf-16-le'
+        return bytes(data[at:at+size]).decode(codec),at,size,codec
+    changed=set()
+    for at,kind in chunks:
+        if kind!=0x102:continue
+        extension=at+16
+        if read(struct.unpack_from('<I',data,extension+4)[0])[0]!='manifest':continue
+        attr_start,attr_size,attr_count=struct.unpack_from('<HHH',data,extension+8)
+        for i in range(attr_count):
+            attr=extension+attr_start+i*attr_size
+            ns,name,raw_index=struct.unpack_from('<III',data,attr)
+            if ns==0xffffffff or read(ns)[0]!='http://schemas.android.com/apk/res/android':continue
+            name=read(name)[0];value_type=data[attr+15];value=struct.unpack_from('<I',data,attr+16)[0]
+            if name=='versionCode':
+                if value_type not in (0x10,0x11) or value!=base_code:raise ValueError('Unexpected baseline versionCode')
+                struct.pack_into('<I',data,attr+16,new_code);changed.add(name)
+            elif name=='versionName':
+                if value_type!=3:raise ValueError('Unexpected versionName representation')
+                for index in {value,raw_index}-{0xffffffff}:
+                    text,payload,size,codec=read(index)
+                    if text not in (base_name,new_name):raise ValueError('Unexpected baseline versionName')
+                    updated=new_name.encode(codec)
+                    if len(updated)!=size:raise ValueError('Unsafe manifest size change')
+                    data[payload:payload+size]=updated
+                changed.add(name)
+    if changed!={'versionCode','versionName'}:raise ValueError('Missing manifest version attributes')
+    return bytes(data)
+
+
+def run(*command):
+    process = subprocess.run([str(item) for item in command], capture_output=True, timeout=120, check=True)
+    return process.stdout.decode('utf-8', 'replace')
+
+
+def badging(aapt, apk):
+    info = run(aapt, 'dump', 'badging', apk).splitlines()[0]
+    result = re.fullmatch(r"package: name='([^']+)' versionCode='([0-9]+)' versionName='([^']+)'.*", info)
+    if not result:
+        raise ValueError('Cannot read APK version from AndroidManifest.xml')
+    return result[1], int(result[2]), result[3]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--base-apk', type=Path, required=True)
+    parser.add_argument('--java', type=Path, required=True)
+    parser.add_argument('--build-tools', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    args = parser.parse_args()
+    root = Path(__file__).resolve().parents[1]
+    loader = json.loads((root/'build-loader/result.json').read_text(encoding='utf-8'))
+    kernels = json.loads((root/'build-local/result.json').read_text(encoding='utf-8'))
+    new_code, new_name = loader['versionCode'], loader['versionName']
+    if kernels['apk_target_version'] != new_name:
+        raise ValueError('Rebuild kernels and loader for the same APK version')
+    aapt, zipalign = (args.build_tools/name for name in ('aapt.exe','zipalign.exe'))
+    output = args.output.resolve()
+    if output == args.base_apk.resolve() or output.exists():
+        raise ValueError('Choose a new output path for the unsigned APK')
+    package, base_code, base_name = badging(aapt, args.base_apk)
+    if package not in ('io.github.vividbeacon43.wxentry', 'com.zafiro.wxentry') or new_code <= base_code:
+        raise ValueError('Expected an older WXEntry APK as the base')
+    loader_source = (root/'loader/Main.java').read_text(encoding='utf-8')
+    expected = re.search(r'EXPECTED_SIG\s*=\s*"([a-f0-9]+)"', loader_source)[1]
+    cert = run(args.java, '-jar', args.build_tools/'lib/apksigner.jar', 'verify', '--print-certs', args.base_apk)
+    if not re.search(r'certificate SHA-256 digest:\s*'+expected+r'\b', cert):
+        raise ValueError('Base APK must use the official WXEntry signing certificate')
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        'classes.dex': Path(loader['loader_dex']).read_bytes(),
+        'classes2.dex': Path(kernels['editions']['free']['dex']).read_bytes(),
+    }
+    with tempfile.TemporaryDirectory(prefix='wxentry-apk-', dir=output.parent) as temp:
+        raw = Path(temp)/'unaligned.apk'
+        aligned = Path(temp)/'aligned.apk'
+        with zipfile.ZipFile(args.base_apk) as old, zipfile.ZipFile(raw, 'w', zipfile.ZIP_DEFLATED) as new:
+            for item in old.infolist():
+                if item.filename.startswith('META-INF/') or re.fullmatch(r'classes[0-9]*\.dex', item.filename):
+                    continue
+                data = old.read(item)
+                if item.filename == 'AndroidManifest.xml':
+                    data = patch_manifest(data, base_code, base_name, new_code, new_name)
+                new.writestr(item, data)
+            for filename, data in payload.items():
+                new.writestr(filename, data)
+        run(zipalign, '-f', '-p', 4, raw, aligned)
+        run(zipalign, '-c', '-p', 4, aligned)
+        if badging(aapt, aligned) != (package, new_code, new_name):
+            raise RuntimeError('Unexpected package name or version')
+        with zipfile.ZipFile(aligned) as apk:
+            if apk.testzip() or any(apk.read(name) != data for name, data in payload.items()):
+                raise RuntimeError('APK payload validation failed')
+        aligned.rename(output)
+    print(output)
+
+
+if __name__ == '__main__':
+    main()

@@ -1,5 +1,5 @@
 """Isolated production-handler tests; synthetic accounts and freshly generated RSA key only."""
-import unittest,tempfile,pathlib,importlib.util,json,sys,concurrent.futures,threading
+import unittest,tempfile,pathlib,importlib.util,json,sys,concurrent.futures,threading,hashlib
 from unittest.mock import patch
 sys.path.insert(0,r'C:\Users\Q\Documents\Codex\2026-11-03\new-chat\work\tools\ssh-python')
 from cryptography.hazmat.primitives.asymmetric import rsa,padding
@@ -26,6 +26,49 @@ class Activation(unittest.TestCase):
  def code(self,tier):
   with self.m._pol_lock:
    code=self.m.admin_gen(1)[0];tiers=self.m._load_map(self.m.CODE_TIER);tiers[code]=tier;self.m._save_map(self.m.CODE_TIER,tiers);return code
+ def test_announcements_are_public_and_sorted_by_kernel_version(self):
+  self.h.command='GET'
+  self.h.path='/wx/kernel/announcements'
+  self.h._send=lambda code,body:(json.loads(body),code)
+  self.assertEqual(self.h._route(None),({'releases':[]},200))
+  path=self.base/'announcements.json'
+  self.write(path,{'releases':[{'version':'9','added':['新增甲']},{'version':'10','date':'2026-11-12','fixed':['修复乙']}]})
+  response,status=self.h._route(None)
+  self.assertEqual(status,200)
+  self.assertEqual([item['version'] for item in response['releases']],['10','9'])
+  self.assertEqual(response['releases'][0]['fixed'],['修复乙'])
+  self.assertEqual(response['releases'][1]['added'],['新增甲'])
+  self.write(path,{'releases':[{'version':'10','fixed':'bad'}]})
+  self.assertEqual(self.h._route(None)[1],503)
+
+ def test_old_apk_cannot_get_new_kernel_for_its_authorized_edition(self):
+  code=self.code('plus')
+  license,status=self.activate('wxid_version_gate',code)
+  self.assertEqual(status,200)
+  channel=self.base/'kernels'/'plus'
+  channel.mkdir(parents=True)
+  data=b'fixture encrypted kernel'
+  (channel/'kernel.enc').write_bytes(data)
+  manifest=dict(edition='plus',v='280',sha256='a'*64,enc_sha256=hashlib.sha256(data).hexdigest(),
+                sig='fixture',min_apk_v=119)
+  self.write(channel/'kernel.json',manifest)
+  self.h.command='POST'
+  self.h._send=lambda status,body,*_:(body,status)
+  def request(version,download=False):
+   req=dict(token=license['token'],v='280',sha256=manifest['sha256'])
+   if version is not None: req['apk_v']=version
+   return self.h._kernel_delivery(json.dumps(req).encode(),download)
+  for old in (None,117,118):
+   self.assertEqual(request(old)[1],426)
+   self.assertEqual(request(old,True)[1],426)
+  grant,status=request(119)
+  self.assertEqual(status,200)
+  self.assertEqual((grant['edition'],grant['v']),('plus','280'))
+  self.assertEqual(request(119,True),(data,200))
+  del manifest['min_apk_v']
+  self.write(channel/'kernel.json',manifest)
+  self.assertEqual(request(None,True),(data,200))
+
  def test_new_account_restores_after_reinstall_and_policy_off(self):
   first,status=self.who('wxid_new');self.assertEqual(status,200);self.assertTrue(first['ok']);self.assertEqual(first['tier'],'free');code=first['code']
   self.assertEqual(self.m.token_ok(first['token'])['code'],code);self.assertEqual(self.m.load_bind()[code]['wxid'],'wxid_new')

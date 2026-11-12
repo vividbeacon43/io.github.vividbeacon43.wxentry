@@ -1,33 +1,10 @@
 {
-  "kernel_version": "260",
-  "apk_version": "2.17",
-  "apk_version_code": 117,
-  "apk_changed": false,
-  "previous_kernel_version": "258",
-  "rollback_manifest_version": "261",
-  "rollback_kernel_content": "258",
-  "published_at": "2026-11-09T16:31:41.535482+08:00",
-  "editions": {
-    "free": {
-      "version": "260",
-      "sha256": "78f1b7b515844d2eb24b4ff3b05ad03080cc087448a410bf3e973b7523d902cd",
-      "enc_sha256": "f29c77ba29da08e127b6edde44aa70d51c52ae98f74379157b168a5f6373c310",
-      "signature_verified": true
-    },
-    "plus": {
-      "version": "260",
-      "sha256": "3d1fc5fe4dfaaf08000f2e0da952c1ec52718987e7813e02351b374de2ccb77a",
-      "enc_sha256": "b656922a1def4d2003fa493d097e6d861fb17801df9592cce0d30f85ea5003ce",
-      "signature_verified": true
-    },
-    "vip": {
-      "version": "260",
-      "sha256": "81f8b548532f51d264b00c38a23b4bb61516a8273e987427c66b3fe5d324be4f",
-      "enc_sha256": "bc60e31b896dee24f3a7e7215a8c9768cfd15f31f95fee44b9eaa1ba885ed1ae",
-      "signature_verified": true
-    }
-  },
-  "phone_tested": true,
-  "backend_changed": false,
-  "feature": "Native unread sheet right-side mark-all-read shortcut in all editions"
+  "status": "candidate",
+  "source_baseline": "v279",
+  "kernel_version": "281",
+  "apk_version": "2.19",
+  "apk_version_code": 119,
+  "signed": false,
+  "phone_tested": false,
+  "production_deployed": false
 }

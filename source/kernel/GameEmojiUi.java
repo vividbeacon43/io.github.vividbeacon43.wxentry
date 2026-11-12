@@ -1,0 +1,24 @@
+package com.zafiro.wxentry.kernel;
+import android.app.*;import android.content.*;import android.text.*;import android.view.*;import android.widget.*;import java.util.*;
+
+final class GameEmojiUi {
+    static java.lang.ref.WeakReference<AlertDialog> shown=new java.lang.ref.WeakReference<AlertDialog>(null);
+    static Activity activity(Context context){for(int i=0;i<8&&context!=null;i++){if(context instanceof Activity)return (Activity)context;if(!(context instanceof ContextWrapper))break;Context next=((ContextWrapper)context).getBaseContext();if(next==context)break;context=next;}return null;}
+    static void toast(Context context,String text){Toast.makeText(context,text,Toast.LENGTH_LONG).show();}
+    static void show(final View anchor,final GameEmojiData.Kind kind){final Activity act=activity(anchor.getContext());if(act==null||act.isFinishing()||act.isDestroyed()||!GameEmojiStore.enabled())return;AlertDialog previous=shown.get();if(previous!=null&&previous.isShowing())return;
+        try{final GameEmojiData data=GameEmojiStore.current();final GameEmojiData.Slot slot=data.slot(kind);final String owner=data.owner;
+            LinearLayout box=SettingsUi.column(act);box.addView(SettingsUi.text(act,"仅设置结果，点击表情时才发送。后续序列优先，用完恢复默认结果。",13));
+            SettingsUi.heading(box,"默认结果");final Spinner fallback=new Spinner(act);String[] labels=new String[kind.max+1];for(int i=0;i<labels.length;i++)labels[i]=GameEmojiData.label(kind,i);ArrayAdapter<String> adapter=new ArrayAdapter<String>(act,android.R.layout.simple_spinner_dropdown_item,labels);fallback.setAdapter(adapter);fallback.setSelection(slot.fallback);box.addView(fallback,new LinearLayout.LayoutParams(-1,-2));
+            SettingsUi.heading(box,"后续结果（按顺序发送）");final TextView count=SettingsUi.text(act,"",13);box.addView(count);
+            final EditText sequence=new EditText(act);sequence.setTextSize(16);sequence.setText(GameEmojiData.display(kind,slot.next));sequence.setHint(kind==GameEmojiData.Kind.DICE?"例如：6, 1, 3, 6":"例如：石头, 剪刀, 布");sequence.setMinLines(2);sequence.setMaxLines(5);sequence.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);box.addView(sequence,new LinearLayout.LayoutParams(-1,-2));
+            sequence.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int b,int c){}public void onTextChanged(CharSequence s,int a,int b,int c){try{count.setText("共 "+GameEmojiData.parse(kind,s.toString()).size()+" 次，最多 256 次");}catch(Throwable invalid){count.setText("请检查结果格式");}}public void afterTextChanged(Editable e){}});count.setText("共 "+slot.next.size()+" 次，最多 256 次");
+            LinearLayout quick=new LinearLayout(act);for(int i=1;i<=kind.max;i++){final int value=i;Button b=new Button(act);b.setText(GameEmojiData.label(kind,i));b.setTextSize(14);b.setMinWidth(0);b.setMinimumWidth(0);b.setPadding(0,0,0,0);quick.addView(b,new LinearLayout.LayoutParams(0,SettingsUi.dp(act,44),1));b.setOnClickListener(new View.OnClickListener(){public void onClick(View v){String old=sequence.getText().toString().trim();sequence.setText(old+(old.isEmpty()?"":", ")+GameEmojiData.label(kind,value));sequence.setSelection(sequence.length());}});}box.addView(quick);
+            box.addView(SettingsUi.text(act,"点击上方结果可追加一次，也可直接输入并用逗号分隔。留空则每次采用默认结果。",12));
+            if(!slot.ticket.isEmpty())box.addView(SettingsUi.text(act,"上一条提交尚未确认。保存新设置会解除等待，并以此处序列为准；请先核对上一条是否已发送。",13));
+            ScrollView scroll=new ScrollView(act);scroll.addView(box);
+            final AlertDialog dialog=new AlertDialog.Builder(act).setTitle(kind.label+"结果设置").setView(scroll).setNegativeButton("取消",null).setNeutralButton("清空序列",null).setPositiveButton("保存",null).create();shown=new java.lang.ref.WeakReference<AlertDialog>(dialog);dialog.show();
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(new View.OnClickListener(){public void onClick(View v){sequence.setText("");}});
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener(){public void onClick(View v){try{if(!GameEmojiStore.enabled()||!owner.equals(GameEmojiStore.owner()))throw new IllegalStateException("账号或开关已变化，请重新设置");List<Integer> values=GameEmojiData.parse(kind,sequence.getText().toString());if(!GameEmojiStore.configure(owner,kind,fallback.getSelectedItemPosition(),values))throw new IllegalStateException("设置保存失败");GameEmojiRuntime.configured(owner,kind);dialog.dismiss();toast(act,"已保存 "+kind.label+"后续 "+values.size()+" 次结果，默认"+GameEmojiData.label(kind,fallback.getSelectedItemPosition()));}catch(Throwable failure){toast(act,failure.getMessage()==null?"设置保存失败":failure.getMessage());}}});
+        }catch(Throwable failure){toast(act,"结果设置暂不可用");Kernel.T("GAMEEMOJI settings-error "+failure.getClass().getSimpleName());}
+    }
+}

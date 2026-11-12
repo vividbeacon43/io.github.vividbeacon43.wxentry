@@ -73,9 +73,11 @@ final class SnsLocalRuntime {
             Method select=SnsLocalNative.cls(name).getDeclaredMethod("onMMMenuItemSelected",MenuItem.class,int.class);
             XposedBridge.hookMethod(select,new XC_MethodHook(){protected void beforeHookedMethod(MethodHookParam p){if(!(p.args[0] instanceof MenuItem))return;MenuItem item=(MenuItem)p.args[0];if(item.getItemId()!=LIKES_ID&&item.getItemId()!=COMMENTS_ID&&item.getItemId()!=CLEAR_ID)return;p.setResult(null);select(menus.remove(item));}});
         }
-        XposedBridge.hookAllMethods(Activity.class,"onResume",new XC_MethodHook(){protected void afterHookedMethod(MethodHookParam p){main.post(new Runnable(){public void run(){refresh();}});}});
+        XposedBridge.hookAllMethods(Activity.class,"onResume",new XC_MethodHook(){protected void afterHookedMethod(MethodHookParam p){if(p.thisObject instanceof Activity)SnsLocalSurfaces.resumed((Activity)p.thisObject);main.post(new Runnable(){public void run(){refresh();}});}});
         SnsLocalStore.changed=new Runnable(){public void run(){main.post(new Runnable(){public void run(){refresh();}});}};
         ready=true;Kernel.T("ARSNSLOCAL ready localOnly=true nativeRecordsUnchanged=true");
+        try{SnsLocalSurfaces.start();}catch(Throwable failure){log("surfaces-unavailable",failure);}
+        try{SnsLocalGallery.start();}catch(Throwable failure){log("gallery-unavailable",failure);}
     }
     static void add(Menu menu,Activity act,SnsLocalNative.Target target,int id,String title){
         if(menu.findItem(id)!=null)return;int group=menu.size()>0?menu.getItem(0).getGroupId():0;MenuItem item=menu.add(group,id,0,title);menus.put(item,new MenuBinding(target,act,id));
@@ -114,6 +116,6 @@ final class SnsLocalRuntime {
         }catch(Throwable failure){if(bound!=null)bound.clear();log("bind-error",failure);return false;}
     }
     static void expand(final Bound bound,boolean likes){if(likes)bound.likesVisible+=100;else bound.commentsExpanded=true;View item=bound.item.get();if(item!=null){bound.restoreLike();if(render(item,true))item.requestLayout();}}
-    static void refresh(){for(View item:new ArrayList<View>(states.keySet()))if(item!=null)try{XposedHelpers.callMethod(item,"q");item.requestLayout();}catch(Throwable failure){Bound old=states.get(item);if(old!=null)old.clear();}watch();}
+    static void refresh(){for(View item:new ArrayList<View>(states.keySet()))if(item!=null)try{XposedHelpers.callMethod(item,"q");item.requestLayout();}catch(Throwable failure){Bound old=states.get(item);if(old!=null)old.clear();}SnsLocalSurfaces.refresh();SnsLocalGallery.refresh();watch();}
     static void watch(){if(ticking||states.isEmpty())return;ticking=true;main.postDelayed(new Runnable(){public void run(){ticking=false;if(states.isEmpty())return;String now=Kernel.receiptAccount()+"/"+Kernel.momentsPremiumEnabled()+"/"+SnsLocalStore.revision();if(!now.equals(policy)){policy=now;refresh();}watch();}},2000L);}
 }

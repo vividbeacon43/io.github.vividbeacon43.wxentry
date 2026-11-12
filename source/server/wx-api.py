@@ -963,6 +963,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._legacy_free_kernel('legacy.json')
         if path == '/kernel.enc':
             return self._legacy_free_kernel('kernel.enc')
+        if path == '/kernel/announcements':
+            return self._kernel_announcements()
         if path == '/kernel/manifest':
             return self._kernel_delivery(body, download=False)
         if path == '/kernel/download':
@@ -1134,6 +1136,42 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({'ok': False, 'msg': 'free kernel not published'}, 503)
         return self._send(200, data, 'application/json; charset=utf-8' if name.endswith('.json') else 'application/octet-stream')
 
+    def _kernel_announcements(self):
+        if self.command not in ('GET', 'HEAD'):
+            return self._json({'ok': False, 'msg': 'GET required'}, 405)
+        try:
+            with open(os.path.join(BASE, 'announcements.json'), 'rb') as f:
+                raw = f.read(131073)
+            if len(raw) > 131072:
+                raise ValueError('announcements too large')
+            releases = json.loads(raw.decode('utf-8'))['releases']
+            if not isinstance(releases, list):
+                raise ValueError('expected a release list')
+            result, seen = [], set()
+            for entry in releases:
+                version = entry['version']
+                if not isinstance(version, str) or not re.fullmatch(r'[1-9][0-9]{0,8}', version) or version in seen:
+                    raise ValueError('invalid or duplicate release version')
+                date = entry.get('date', '')
+                if not isinstance(date, str) or (date and not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', date)):
+                    raise ValueError('invalid release date')
+                notes = {key: entry.get(key, []) for key in ('added', 'fixed')}
+                if not any(notes.values()) or any(
+                        not isinstance(lines, list) or any(not isinstance(line, str) or not line.strip() for line in lines)
+                        for lines in notes.values()):
+                    raise ValueError('invalid release notes')
+                seen.add(version)
+                result.append(dict(version=version, date=date, **notes))
+            result.sort(key=lambda entry: int(entry['version']), reverse=True)
+            body = json.dumps({'releases': result}, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+            if len(body) > 131072:
+                raise ValueError('response too large')
+        except FileNotFoundError:
+            return self._json({'releases': []})
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
+            return self._json({'ok': False, 'msg': 'announcements unavailable'}, 503)
+        return self._send(200, body)
+
     def _kernel_delivery(self, body, download=False):
         if self.command != 'POST':
             return self._json({'ok': False, 'msg': 'POST required'}, 405)
@@ -1169,6 +1207,14 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError('invalid channel manifest')
         except (OSError, ValueError, TypeError):
             return self._json({'ok': False, 'msg': 'edition kernel unavailable'}, 503)
+        minimum_apk = manifest.get('min_apk_v', 0)
+        apk_version = req.get('apk_v', 0)
+        if type(minimum_apk) is not int or not 0 <= minimum_apk <= 999999999:
+            return self._json({'ok': False, 'msg': 'invalid kernel compatibility setting'}, 503)
+        if type(apk_version) is not int or not 0 <= apk_version <= 999999999:
+            return self._json({'ok': False, 'msg': 'invalid APK version'}, 400)
+        if apk_version < minimum_apk:
+            return self._json({'ok': False, 'msg': 'update module APK first', 'min_apk_v': minimum_apk}, 426)
         if not download:
             if not rate_ok(client_ip(self)):
                 return self._json({'ok': False, 'msg': 'too many requests'}, 429)

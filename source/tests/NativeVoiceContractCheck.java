@@ -15,8 +15,25 @@ public class NativeVoiceContractCheck {
             &&m.getParameterTypes().equals(Arrays.asList(params))) { checks++;return m; }
         throw new AssertionError("Missing contract "+cls+"."+name);
     }
+    static void calls(Method caller, Method callee) {
+        for (Instruction instruction : caller.getImplementation().getInstructions()) {
+            if (!(instruction instanceof ReferenceInstruction)) continue;
+            Reference reference = ((ReferenceInstruction) instruction).getReference();
+            if (reference instanceof MethodReference && callee.equals(reference)) {
+                checks++;
+                return;
+            }
+        }
+        throw new AssertionError(caller.getName() + " does not call " + callee.getName());
+    }
     public static void main(String[] args)throws Exception {
         Set<String> names=new HashSet<>(Arrays.asList("com.tencent.mm.ui.transmit.MsgRetransmitUI","com.tencent.mm.ui.chatting.viewitems.gq","com.tencent.mm.ui.chatting.viewitems.nq","com.tencent.mm.ui.chatting.viewitems.rq","q71.n1","q71.c1","mc0.b","com.tencent.mm.vfs.z6","com.tencent.mm.vfs.x1","com.tencent.mm.vfs.k4","pj0.a","pj0.d","xj0.x","wj0.o","w41.z1","hr3.j0","hr3.m0","hr3.h0","hr3.o0","ak5.i4"));
+        names.addAll(Arrays.asList("com.tencent.mm.ui.chatting.viewitems.sq", "com.tencent.mm.ui.chatting.viewitems.h0",
+                "com.tencent.mm.ui.chatting.component.gp", "wk5.d", "w41.i9", "com.tencent.mm.modelbase.s1",
+                "com.tencent.mm.ui.chatting.ChattingUIFragment", "com.tencent.mm.ui.chatting.BaseChattingUIFragment",
+                "com.tencent.mm.ui.chatting.adapter.k", "com.tencent.mm.storage.g9", "yx0.k0",
+                "sq.b", "ao5.sb", "com.tencent.mm.ui.zg", "com.tencent.mm.ui.FindMoreFriendsUI",
+                "com.tencent.mm.autogen.events.VoipCheckIsDeviceUsingEvent", "com.tencent.mm.sdk.event.IEvent", "im.b10"));
         try(ZipFile zip=new ZipFile(args[0])) {
             Enumeration<? extends ZipEntry> entries=zip.entries();
             while(entries.hasMoreElements()) {
@@ -30,6 +47,55 @@ public class NativeVoiceContractCheck {
             method(cls,"R","Z","Landroid/view/MenuItem;","Lwk5/d;","Lqm5/d;");
         }
         method("com.tencent.mm.ui.chatting.viewitems.nq","n","V","Lcom/tencent/mm/ui/chatting/viewitems/h0;","Lwk5/d;","Lqm5/d;","Ljava/lang/String;");
+        String voiceItem = "com.tencent.mm.ui.chatting.viewitems.gq";
+        String voiceActions = "com.tencent.mm.ui.chatting.viewitems.sq";
+        String transcript = "com.tencent.mm.ui.chatting.component.gp";
+        String message = "Lcom/tencent/mm/storage/f9;", chat = "Lwk5/d;";
+        method(voiceItem, "n", "V", "Lcom/tencent/mm/ui/chatting/viewitems/h0;", chat, "Lqm5/d;", "Ljava/lang/String;");
+        Method manual = method(voiceItem, "R", "Z", "Landroid/view/MenuItem;", chat, "Lqm5/d;");
+        Method nativeRequest = method(voiceActions, "c", "Z", "I", chat, message, "Lqk5/n2;", "Z", "I");
+        calls(manual, nativeRequest);
+        calls(nativeRequest, method(transcript, "w0", "V", message, "Z", "I", "I", "I"));
+        method(voiceActions, "p", "Z", message);
+        method(voiceActions, "a", "Z", message, chat);
+        String fragment = "com.tencent.mm.ui.chatting.ChattingUIFragment";
+        for (String lifecycle : new String[]{"K0", "J0", "b1"}) method(fragment, lifecycle, "V");
+        String adapter = "com.tencent.mm.ui.chatting.adapter.k";
+        method(adapter, "n", "V", "Lyt3/r1;");
+        method(adapter, "W0", message, "I");
+        method(adapter, "getCount", "I");
+        String storage = "com.tencent.mm.storage.g9";
+        calls(method(storage, "Zb", "J", message), method(storage, "a", "J", message, "Z", "Z"));
+        calls(method(voiceActions, "j", message, message),
+                method("yx0.k0", "k2", message, "Ljava/lang/String;", "J"));
+        method(transcript, "y0", "Z", "J");
+        method(transcript, "C0", "Ljava/lang/String;", "J", "Ljava/lang/String;");
+        method("com.tencent.mm.ui.chatting.viewitems.h0", "getCurrentMsgInfo", message, chat);
+        method("com.tencent.mm.ui.chatting.viewitems.h0", "getAdapterPosition", "I");
+        method("q71.c1", "g", "I", message, "Ljava/lang/String;");
+        method("wk5.d", "x", "Ljava/lang/String;");
+        method("w41.i9", "e", "Lcom/tencent/mm/modelbase/s1;");
+        method("com.tencent.mm.modelbase.s1", "n", "I");
+        String context = "Landroid/content/Context;", bundle = "Landroid/os/Bundle;";
+        Method cameraGuard = method("sq.b", "i", "Z", context, "Z", bundle);
+        Method videoGuard = method("sq.b", "C", "Z", context);
+        Method otherCamera = method("sq.b", "m", "Z", context, "Z", bundle);
+        calls(cameraGuard, otherCamera);
+        calls(videoGuard, otherCamera);
+        calls(videoGuard, method("sq.b", "q", "Z", context, "Z"));
+        calls(videoGuard, method("sq.b", "B", "Z", context, "Z"));
+        calls(videoGuard, method("sq.b", "s", "Z", context));
+        calls(method("ao5.sb", "b", "V", message, "Ljava/lang/String;", "Ljava/lang/String;", "I", "Landroid/view/View;"), videoGuard);
+        calls(method("com.tencent.mm.ui.zg", "onItemClick", "V", "Landroid/widget/AdapterView;", "Landroid/view/View;", "I", "J"), cameraGuard);
+        calls(method("com.tencent.mm.ui.FindMoreFriendsUI", "w0", "Z", "Lcom/tencent/mm/ui/base/preference/q;",
+                "Lcom/tencent/mm/ui/base/preference/Preference;", "Lcom/tencent/mm/ui/base/preference/m0;"), cameraGuard);
+        Method callQuery = method("com.tencent.mm.autogen.events.VoipCheckIsDeviceUsingEvent", "<init>", "V");
+        method("com.tencent.mm.sdk.event.IEvent", "e", "Z");
+        Method voiceGate = method(voiceActions, "g", "Z", chat, message, "Lcom/tencent/mm/plugin/msgquote/model/MsgQuoteItem;");
+        calls(voiceGate, callQuery);
+        calls(voiceGate, method("sq.b", "q", "Z", context, "Z"));
+        calls(voiceGate, method("sq.b", "v", "Z", context));
+        calls(voiceGate, method("sq.b", "e", "Z", context));
         method("q71.n1","t1","Ljava/lang/String;","Ljava/lang/String;","Ljava/lang/String;");
         method("q71.c1","c","Ljava/lang/String;","Ljava/lang/String;");
         method("mc0.b","gk","Ljava/lang/String;","Lcom/tencent/mm/storage/f9;","Ljava/lang/String;","Z");
@@ -80,6 +146,13 @@ public class NativeVoiceContractCheck {
         Map<String,String> fields=new LinkedHashMap<>();
         fields.put("Lcom/tencent/mm/ui/chatting/viewitems/rq;->c","Landroid/widget/TextView;");
         fields.put("Lcom/tencent/mm/ui/chatting/viewitems/rq;->p","Landroid/view/View;");
+        fields.put("Lcom/tencent/mm/ui/chatting/component/gp;->t", "Ljava/util/LinkedHashMap;");
+        fields.put("Lcom/tencent/mm/ui/chatting/component/gp;->m", "Z");
+        fields.put("Lcom/tencent/mm/ui/chatting/BaseChattingUIFragment;->f", chat);
+        fields.put("Lwk5/d;->i", "Z");
+        fields.put("Lcom/tencent/mm/ui/chatting/adapter/k;->K", chat);
+        fields.put("Lcom/tencent/mm/autogen/events/VoipCheckIsDeviceUsingEvent;->g", "Lim/b10;");
+        for (String name : new String[]{"a", "b", "c"}) fields.put("Lim/b10;->" + name, "Z");
         fields.put("Lxj0/x;->i","Lpj0/d;");
         fields.put("Lpj0/d;->q","Lhr3/j0;");fields.put("Lpj0/d;->r","Lhr3/m0;");
         fields.put("Lpj0/d;->s","Lhr3/h0;");fields.put("Lpj0/d;->t","Lhr3/o0;");
@@ -90,6 +163,6 @@ public class NativeVoiceContractCheck {
             for(Field f:classes.get(parts[0]).getFields())if(f.getName().equals(parts[1])&&f.getType().equals(entry.getValue()))found=true;
             if(!found)throw new AssertionError("Native result/icon contract missing "+entry.getKey());checks++;
         }
-        System.out.println("PASS "+checks+" native voice menu/file/task/result contracts");
+        System.out.println("PASS "+checks+" native voice and in-call chat media/scanner contracts");
     }
 }

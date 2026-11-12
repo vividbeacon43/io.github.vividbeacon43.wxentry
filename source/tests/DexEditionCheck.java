@@ -12,8 +12,12 @@ public final class DexEditionCheck {
         Set<String> red=new HashSet<>();ClassDef settings=null;
         String root="Lcom/zafiro/wxentry/kernel/";
         Set<String> receiptClasses=new HashSet<>();
+        boolean premium=args[1].equals("plus")||args[1].equals("vip");
+        boolean callToolsMenu=false;
         for(ClassDef c:dex.getClasses()) {
             receiptClasses.add(c.getType());
+            if(c.getType().equals(root+"Kernel$MenuAction;"))for(Field field:c.getFields())
+                if(field.getName().equals("CALL_TOOLS"))callToolsMenu=true;
             if(c.getType().startsWith(root+"RedPacket"))red.add(c.getType());
             if(c.getType().equals(root+"RedPacketSettings;"))settings=c;
             if(c.getType().equals(root+"Kernel;"))kernel=c;
@@ -38,24 +42,28 @@ public final class DexEditionCheck {
             }
         }
         if(kernel==null||!voice||!forward||!sender||!picker||!queue||!icon||!layout)throw new AssertionError("Base voice runtime missing");
+        if(receiptClasses.contains(root+"CallToolsRuntime;")!=premium || callToolsMenu!=premium)
+            throw new AssertionError("Experimental in-call tools edition boundary failed");
         Map<String,String> values=new HashMap<>();
         for(Field f:kernel.getStaticFields())if(f.getInitialValue() instanceof StringEncodedValue)
             values.put(f.getName(),((StringEncodedValue)f.getInitialValue()).getValue());
-        if(!args[1].equals(values.get("EDITION"))||!"260".equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
+        if(!args[1].equals(values.get("EDITION"))||!args[2].equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
         for(String name:new String[]{"RedPacketUi","RedPacketUiNative","RedPacketPolicy","RedPacketEngine","RedPacketNative","RedPacketRuntime","RedPacketSettings"})
             if(!red.contains(root+name+";"))throw new AssertionError("Red packet runtime missing: "+name);
-        boolean contextAtBoot=false, nativeUiDelegate=false, fullNativeEntry=false;
+        boolean contextAtBoot=false, nativeUiDelegate=false, fullNativeEntry=false, callToolsAtBoot=false;
         for(Method m:kernel.getMethods())if(m.getImplementation()!=null)
             for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction) {
                 Reference ref=((ReferenceInstruction)ins).getReference();
                 if(ref instanceof MethodReference) {
                     MethodReference call=(MethodReference)ref;
                     if(m.getName().equals("boot0") && call.getDefiningClass().equals(root+"Kernel;") && call.getName().equals("rememberAppContext"))contextAtBoot=true;
+                    if(m.getName().equals("boot0") && call.getDefiningClass().equals(root+"CallToolsRuntime;") && call.getName().equals("start"))callToolsAtBoot=true;
                     if(m.getName().equals("openReceiveUI") && call.getDefiningClass().equals(root+"RedPacketUiNative;") && call.getName().equals("prepare"))fullNativeEntry=true;
                     if(m.getName().equals("openReceiveUI") && call.getDefiningClass().equals(root+"RedPacketUi;") && call.getName().equals("open"))nativeUiDelegate=true;
                 }
             }
         if(!contextAtBoot || !nativeUiDelegate || !fullNativeEntry)throw new AssertionError("Native UI context recovery is not wired into the released kernel");
+        if(callToolsAtBoot!=premium)throw new AssertionError("In-call tools boot boundary failed");
         boolean nativeTip=false;
         for(Method m:kernel.getMethods()) {
             if(m.getName().equals("insertKeptCopy")||m.getName().equals("cloneRecently")||m.getName().equals("notifyInsert"))throw new AssertionError("Unsafe raw message cloning path retained");
@@ -74,7 +82,6 @@ public final class DexEditionCheck {
                 }
                 if(ref instanceof StringReference && ((StringReference)ref).getString().equals("Zb"))throw new AssertionError("Annotation allocates a new native message");
             }
-        boolean premium=args[1].equals("plus")||args[1].equals("vip");
         for(String name:new String[]{"SnsScheduleData","SnsScheduleEngine","SnsScheduleStore","SnsScheduleMedia","SnsScheduleNative","SnsScheduleRuntime","SnsScheduleUi","SnsScheduleWake"})if(receiptClasses.contains(root+name+";")!=args[1].equals("vip"))throw new AssertionError("Scheduler VIP boundary failed: "+name);
         for(String name:new String[]{"SnsLocalRuntime","SnsLocalNative","SnsLocalPicker","SnsLocalPanel"})if(receiptClasses.contains(root+name+";")!=premium)throw new AssertionError("Local Moments paid boundary failed: "+name);
         for(String name:new String[]{"SnsLocalData","SnsLocalStore","SnsLocalSettings"})if(!receiptClasses.contains(root+name+";"))throw new AssertionError("Local Moments settings missing");
@@ -82,7 +89,7 @@ public final class DexEditionCheck {
         for(Method m:kernel.getMethods())if(m.getName().equals("boot0")&&m.getImplementation()!=null)for(Instruction i:m.getImplementation().getInstructions())if(i instanceof ReferenceInstruction){Reference ref=((ReferenceInstruction)i).getReference();if(ref instanceof MethodReference&&((MethodReference)ref).getDefiningClass().equals(root+"SnsLocalRuntime;")&&((MethodReference)ref).getName().equals("start"))localStart=true;}
         if(localStart!=premium)throw new AssertionError("Local Moments runtime boot boundary failed");
         for(ClassDef c:dex.getClasses())if(c.getType().startsWith(root+"SnsLocal"))for(Method m:c.getMethods())if(m.getImplementation()!=null)for(Instruction i:m.getImplementation().getInstructions())if(i instanceof ReferenceInstruction){Reference ref=((ReferenceInstruction)i).getReference();
-            if(ref instanceof MethodReference){MethodReference call=(MethodReference)ref;String name=call.getName();if(Arrays.asList("execSQL","insertWithOnConflict","rawQuery","setObjectField","setIntField","performClick","callOnClick","sendBroadcast").contains(name)||call.getDefiningClass().startsWith("Lcom/tencent/mm/modelbase/"))throw new AssertionError("Local Moments must not modify native SNS records or submit social actions");}
+            if(ref instanceof MethodReference){MethodReference call=(MethodReference)ref;String name=call.getName();boolean viewCounterRestore=c.getType().equals(root+"SnsLocalSurfaces$Surface;")&&m.getName().equals("clearAdded")&&(name.equals("setIntField")||name.equals("setObjectField"));if(!viewCounterRestore&&Arrays.asList("execSQL","insertWithOnConflict","rawQuery","setObjectField","setIntField","performClick","callOnClick","sendBroadcast").contains(name)||call.getDefiningClass().startsWith("Lcom/tencent/mm/modelbase/"))throw new AssertionError("Local Moments must not modify native SNS records or submit social actions");}
             if(ref instanceof StringReference){String value=((StringReference)ref).getString();if(Arrays.asList("com.tencent.mm.plugin.sns.model.y7","com.tencent.mm.autogen.events.SnsRepostEvent","/cgi-bin/micromsg-bin/mmsnscomment","/cgi-bin/micromsg-bin/mmsnspost").contains(value))throw new AssertionError("Local Moments social submission protocol forbidden");}
         }
         boolean premiumFlag=false,seenFlag=false;
