@@ -34,7 +34,12 @@ final class SettingsUi {
     }
     static final class CompactSwitch extends Switch {
         final Paint fill=new Paint(Paint.ANTI_ALIAS_FLAG),edge=new Paint(Paint.ANTI_ALIAS_FLAG);
+        private MenuPalette menuPalette;
         CompactSwitch(Context c) { super(c);setLayerType(View.LAYER_TYPE_SOFTWARE,null); }
+        void setMenuPalette(MenuPalette palette) {
+            menuPalette = palette;
+            invalidate();
+        }
         protected void onDraw(Canvas canvas) {
             float d=getResources().getDisplayMetrics().density,w=SWITCH_WIDTH*d,h=SWITCH_HEIGHT*d;
             float x=(getWidth()-w)/2f,y=(getHeight()-h)/2f;
@@ -42,9 +47,11 @@ final class SettingsUi {
             int layer=canvas.saveLayerAlpha(0,0,getWidth(),getHeight(),0);
             super.onDraw(canvas);canvas.restoreToCount(layer);
             float position=Math.max(0,Math.min(1,(getThumbDrawable().getBounds().centerX()-(x+9*d))/(18*d)));
-            boolean checked=isChecked(),enabled=isEnabled(),night=dark(getContext());
-            int track=checked?ROSE:(night?0xFF796575:GRAY);
-            int border=checked?0xFF8B244F:(night?0xFFA18A99:0xFF9C7C8B);
+            boolean checked=isChecked(),enabled=isEnabled();
+            MenuPalette palette = menuPalette != null ? menuPalette : dark(getContext()) ? MenuPalette.DARK : MenuPalette.LIGHT;
+            boolean night = palette == MenuPalette.DARK;
+            int track = checked ? palette.switchOn : palette.switchOff;
+            int border = checked ? palette.switchOnEdge : palette.switchOffEdge;
             if(!enabled) { track=night?0xFF505B6B:0xFFDDE2E8;border=night?0xFF7C899B:0xFFAAB3C0; }
             fill.setStyle(Paint.Style.FILL);fill.setColor(track);
             fill.setShadowLayer(0.65f*d,0,0.5f*d,0x24000000);
@@ -58,8 +65,8 @@ final class SettingsUi {
             canvas.drawCircle(cx,cy,radius-0.35f*d,edge);
         }
     }
-    static Switch control(Context c) {
-        Switch s=new CompactSwitch(c);s.setText("");s.setShowText(false);s.setSplitTrack(false);
+    static CompactSwitch control(Context c) {
+        CompactSwitch s=new CompactSwitch(c);s.setText("");s.setShowText(false);s.setSplitTrack(false);
         s.setButtonDrawable((android.graphics.drawable.Drawable)null);s.setBackground(null);
         s.setThumbTintList(null);s.setTrackTintList(null);
         StateListDrawable track=new StateListDrawable();
@@ -91,7 +98,7 @@ final class SettingsUi {
         return params;
     }
     static final class ToggleRow extends LinearLayout {
-        final Switch control;final TextView title,subtitle;
+        final CompactSwitch control;final TextView title,subtitle;
         ToggleRow(Context c,String label,String detail,boolean checked,Change change) {
             super(c);setOrientation(HORIZONTAL);setGravity(Gravity.CENTER_VERTICAL);setMinimumHeight(dp(c,ROW_HEIGHT));
             setPadding(0,dp(c,8),0,dp(c,8));

@@ -33,7 +33,20 @@ public final class SettingsUiTest {
   compact.setEnabled(false);android.graphics.Canvas disabled=new android.graphics.Canvas();compact.onDraw(disabled);check(disabled.draws.get(0).color!=0xFFFFFFFF&&disabled.draws.get(1).stroke>0,"disabled track remains visible on white background");
   c.resources.config.uiMode=0x20;check(SettingsUi.textColor(c)==0xFFEEEEEE,"dark theme uses readable label color");
   compact.setChecked(false);compact.setEnabled(true);android.graphics.Canvas night=new android.graphics.Canvas();compact.onDraw(night);check(night.draws.get(0).color!=SettingsUi.GRAY&&night.draws.get(1).stroke>0,"night mode has its own visible gray track and border");
+  com.tencent.mm.ui.ok.mode=true;c.resources.config.uiMode=0x10;
+  check(MenuPalette.current(c)==MenuPalette.DARK,"WeChat dark selection overrides light system");
+  compact.setMenuPalette(MenuPalette.current(c));compact.setChecked(true);
+  android.graphics.Canvas hostDark=new android.graphics.Canvas();compact.onDraw(hostDark);
+  check(hostDark.draws.get(0).color==MenuPalette.DARK.switchOn,"switch uses WeChat's dark palette");
+  com.tencent.mm.ui.ok.mode=false;c.resources.config.uiMode=0x20;
+  check(MenuPalette.current(c)==MenuPalette.LIGHT,"WeChat light selection overrides dark system");
+  compact.setMenuPalette(MenuPalette.current(c));android.graphics.Canvas hostLight=new android.graphics.Canvas();compact.onDraw(hostLight);
+  check(hostLight.draws.get(0).color==MenuPalette.LIGHT.switchOn,"switch recolors when host selection changes");
+  com.tencent.mm.ui.ok.mode=null;
+  check(MenuPalette.current(c)==MenuPalette.DARK,"unavailable host reader falls back to Activity resources");
+  c.resources.config.uiMode=0x10;
+  check(MenuPalette.current(c)==MenuPalette.LIGHT,"fallback observes configuration changes in either direction");
   c.resources.metrics.density=3;Switch scaled=SettingsUi.control(c);check(scaled.switchWidth==108&&((GradientDrawable)scaled.thumb).h==48,"drawable and switch geometry scale together");
-  System.out.println("PASS "+checks+" right-side switch/binding/theme checks");
+  System.out.println("PASS "+checks+" switch layout, binding and host theme checks");
  }
 }

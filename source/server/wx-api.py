@@ -1128,7 +1128,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def _legacy_free_kernel(self, name):
         # Legacy/public endpoints never serve a paid kernel, including before publication.
-        path = os.path.join(BASE, 'kernels', 'free', name)
+        directory = os.path.join(BASE, 'kernels', 'free')
+        path = os.path.join(directory, name)
+        if name == 'kernel.enc':
+            legacy_payload = os.path.join(directory, 'legacy.enc')
+            if os.path.isfile(legacy_payload):
+                path = legacy_payload
         try:
             with open(path, 'rb') as f:
                 data = f.read()
@@ -1171,7 +1176,6 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
             return self._json({'ok': False, 'msg': 'announcements unavailable'}, 503)
         return self._send(200, body)
-
     def _kernel_delivery(self, body, download=False):
         if self.command != 'POST':
             return self._json({'ok': False, 'msg': 'POST required'}, 405)

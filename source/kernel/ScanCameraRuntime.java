@@ -1,4 +1,4 @@
-package com.zafiro.wxentry.scancam;
+package com.zafiro.wxentry.kernel;
 
 import android.app.Activity;
 import android.content.ContentResolver;
@@ -28,7 +28,7 @@ import de.robv.android.xposed.XposedHelpers;
  * 默认开启；WXDIR/scan.cam.off 存在 = 关闭。
  * 附加：WXDIR/scan.cam.fast 存在 = 吞掉相册回调（不回落微信相册识别）。
  */
-public final class ScanCameraRuntime {
+final class ScanCameraRuntime {
     static final String TAG = "scancam ";
 
     static String wxdir() {
@@ -73,7 +73,7 @@ public final class ScanCameraRuntime {
         } catch (Throwable t) {}
     }
 
-    public static boolean enabled() {
+    static boolean enabled() {
         try { return !new File(OFF).exists(); } catch (Throwable t) { return true; }
     }
     static boolean fast() {
@@ -81,7 +81,7 @@ public final class ScanCameraRuntime {
     }
 
     /** 内核 boot0 末尾调用；只装一个 Activity.onResume 钩子。 */
-    public static void start() {
+    static boolean start() {
         try {
             XposedHelpers.findAndHookMethod(android.app.Activity.class, "onResume", new XC_MethodHook() {
                 protected void afterHookedMethod(MethodHookParam p) {
@@ -89,8 +89,10 @@ public final class ScanCameraRuntime {
                 }
             });
             L("ready off=" + new File(OFF).exists());
+            return true;
         } catch (Throwable t) {
             L("start err " + t);
+            return false;
         }
     }
 
@@ -416,7 +418,7 @@ public final class ScanCameraRuntime {
     }
 
     /** Keep the existing on-disk setting and return the state actually saved. */
-    public static boolean setEnabled(boolean on) {
+    static boolean setEnabled(boolean on) {
         File off = new File(OFF);
         try {
             if (on) {

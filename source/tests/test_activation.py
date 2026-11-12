@@ -41,6 +41,17 @@ class Activation(unittest.TestCase):
   self.write(path,{'releases':[{'version':'10','fixed':'bad'}]})
   self.assertEqual(self.h._route(None)[1],503)
 
+ def test_legacy_free_serves_payload_for_the_legacy_manifest(self):
+  channel=self.base/'kernels'/'free'
+  channel.mkdir(parents=True)
+  self.h.command='GET'
+  self.h.path='/wx/kernel.enc'
+  self.h._send=lambda code,body,*_:(body,code)
+  (channel/'kernel.enc').write_bytes(b'active payload')
+  self.assertEqual(self.h._route(None),(b'active payload',200))
+  (channel/'legacy.enc').write_bytes(b'legacy payload')
+  self.assertEqual(self.h._route(None),(b'legacy payload',200))
+
  def test_old_apk_cannot_get_new_kernel_for_its_authorized_edition(self):
   code=self.code('plus')
   license,status=self.activate('wxid_version_gate',code)

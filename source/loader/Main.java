@@ -69,8 +69,8 @@ public class Main implements IXposedHookLoadPackage {
     static final String URL_MANIFEST = BASE + "kernel/manifest";
     static final String URL_KERNEL   = BASE + "kernel/download";
     // === 1.43：模块 APK 自身更新 + 内核自动更新/回滚 ===
-    static final int MY_VC = 119;                       // 由 release.py 打包时改写
-    static final String MY_VN = "2.19";
+    static final int MY_VC = 120;                       // 由 release.py 打包时改写
+    static final String MY_VN = "2.20";
     static final String URL_APK_MANIFEST = BASE + "apk.json";
     static final String URL_APK = BASE + "wxentry.apk";
     static final String APK_PENDING = DIR + "apk.pending";

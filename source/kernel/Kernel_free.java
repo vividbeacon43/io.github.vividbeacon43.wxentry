@@ -18,6 +18,7 @@ import java.util.List;
 
 public class Kernel {
     private static volatile boolean MENU_READY;
+    private static volatile boolean SCAN_CAMERA_READY;
     private static long MENU_SHOW_COUNT;
     public static boolean isMenuReady() { return MENU_READY && !MODULE_OFF; }
     public static boolean openRecoveredMenu(Activity act) {
@@ -27,7 +28,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "281";
+    static final String BUILD = "283";
     public static final String EDITION = "free";
     static final boolean RP_PREMIUM_EDITION = false;
     static final boolean TABLET_PREMIUM_EDITION = false;
@@ -607,7 +608,7 @@ static boolean wxVersionOk(Object actObj) {
         } catch (Throwable t) {}
         try { hookPopupContent(); } catch (Throwable t) {}
         try { hookPopupShow(); } catch (Throwable t) {}
-        try { com.zafiro.wxentry.scancam.ScanCameraRuntime.start(); } catch (Throwable t) { T("SCANCAM install-error " + t.getClass().getSimpleName()); }
+        try { SCAN_CAMERA_READY = ScanCameraRuntime.start(); } catch (Throwable t) { T("SCANCAM install-error " + t.getClass().getSimpleName()); }
         MENU_READY = true;
         T("boot done " + (System.currentTimeMillis() - BOOT_T0) + "ms idx=" + DEX_IDX_SRC);
         // 1.75：+ 面板是独立 PopupWindow，触摸回调会被微信覆盖 —— 改成周期扫描，出现就注入
@@ -6070,6 +6071,7 @@ static boolean wxVersionOk(Object actObj) {
         java.util.ArrayList<MenuEntry> rows = new java.util.ArrayList<MenuEntry>();
         if (category == null) {
             for (MenuCategory page : MenuCategory.values()) {
+                if (page == MenuCategory.EXPERIMENTAL && !SCAN_CAMERA_READY && !tabletFeatureAvailable()) continue;
                 if(page==MenuCategory.MOMENTS&&!momentsPremiumEnabled())continue;
                 rows.add(new MenuEntry(null, page, menuCategoryTitle(page)));
             }
@@ -6114,7 +6116,7 @@ static boolean wxVersionOk(Object actObj) {
                 addMenuAction(rows, MenuAction.SNS_TOGGLE, "");
                 break;
             case EXPERIMENTAL:
-                addMenuAction(rows, MenuAction.SCAN_CAMERA, "模拟相机扫码");
+                if (SCAN_CAMERA_READY) addMenuAction(rows, MenuAction.SCAN_CAMERA, "模拟相机扫码");
                 if(!tabletFeatureAvailable())break;
                 addMenuAction(rows,MenuAction.TABLET_MODE,"平板模式");
                 addMenuAction(rows,MenuAction.TABLET_QR,"平板扫码登录");
@@ -6249,14 +6251,14 @@ static boolean wxVersionOk(Object actObj) {
             case SNS_LOCAL_COMMENTS:return SnsLocalStore.enabled(SnsLocalData.Feature.COMMENTS);
             case GAME_EMOJI:return GameEmojiStore.enabled();
             case AUTO_VOICE_TEXT:return VoiceTextRuntime.enabled();
-            case SCAN_CAMERA:return com.zafiro.wxentry.scancam.ScanCameraRuntime.enabled();
+            case SCAN_CAMERA:return ScanCameraRuntime.enabled();
             case TABLET_MODE:return "1".equals(callMainStr("tabletModeConfigured"));
             default:return null;
         }
     }
     static boolean setMenuToggle(Activity act,MenuEntry row,boolean on) {
         if (row.action == MenuAction.SCAN_CAMERA) {
-            boolean saved = com.zafiro.wxentry.scancam.ScanCameraRuntime.setEnabled(on);
+            boolean saved = ScanCameraRuntime.setEnabled(on);
             if (saved != on) toast(act, "模拟相机扫码设置保存失败");
             return saved;
         }
@@ -6288,13 +6290,13 @@ static boolean wxVersionOk(Object actObj) {
 
             final android.widget.LinearLayout head = FeatureMenuUi.column(act);
             FeatureMenuUi.pad(head, 16, 12);
-            final android.widget.TextView tTitle = FeatureMenuUi.text(act, "模块设置", 23, FeatureMenuUi.INK);
+            final android.widget.TextView tTitle = FeatureMenuUi.text(act, "模块设置", 23, FeatureMenuUi.Tone.INK);
             tTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             head.addView(tTitle);
             final android.widget.TextView tVer = FeatureMenuUi.text(act,
-                    verPrefix() + localKernelVer() + " · " + editionLabel(), 12, FeatureMenuUi.MUTED);
+                    verPrefix() + localKernelVer() + " · " + editionLabel(), 12, FeatureMenuUi.Tone.MUTED);
             head.addView(tVer);
-            final android.widget.TextView update = FeatureMenuUi.text(act, updateMenuLabel(), 14, FeatureMenuUi.ROSE);
+            final android.widget.TextView update = FeatureMenuUi.text(act, updateMenuLabel(), 14, FeatureMenuUi.Tone.ROSE);
             update.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             update.setMinHeight(SettingsUi.dp(act, 44));
             update.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -6307,7 +6309,7 @@ static boolean wxVersionOk(Object actObj) {
             updateParams.topMargin = SettingsUi.dp(act, 8);
             head.addView(update, updateParams);
             if (SERVER_REPLY != null && !SERVER_REPLY.isEmpty()) {
-                android.widget.TextView reply = FeatureMenuUi.text(act, "官方回复：" + SERVER_REPLY, 12, FeatureMenuUi.MUTED);
+                android.widget.TextView reply = FeatureMenuUi.text(act, "官方回复：" + SERVER_REPLY, 12, FeatureMenuUi.Tone.MUTED);
                 reply.setMaxLines(2);
                 reply.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 reply.setPadding(0, SettingsUi.dp(act, 6), 0, 0);
@@ -6341,21 +6343,20 @@ static boolean wxVersionOk(Object actObj) {
                     };
             final android.widget.ListView lv = new android.widget.ListView(act);
             lv.setAdapter(listAd);
-            lv.setDivider(new android.graphics.drawable.ColorDrawable(FeatureMenuUi.SURFACE));
-            lv.setDividerHeight(SettingsUi.dp(act, 6));
+            FeatureMenuUi.styleList(lv, MenuPalette.current(act));
             lv.setVerticalScrollBarEnabled(true);
             lv.setScrollbarFadingEnabled(false);
             lv.setSelector(android.R.color.transparent);
             lv.setPadding(SettingsUi.dp(act, 16), 0, SettingsUi.dp(act, 16), 0);
 
-            final android.widget.TextView hint = FeatureMenuUi.text(act, "", 12, FeatureMenuUi.ROSE);
+            final android.widget.TextView hint = FeatureMenuUi.text(act, "", 12, FeatureMenuUi.Tone.ROSE);
             FeatureMenuUi.wireScrollHint(lv, hint);
-            android.widget.LinearLayout box = FeatureMenuUi.column(act);
+            FeatureMenuUi.ThemeLayout box = new FeatureMenuUi.ThemeLayout(act);
             box.addView(head);
             box.addView(lv, new android.widget.LinearLayout.LayoutParams(-1, menuPageHeight(act, items.size(), page[0])));
             box.addView(hint, new android.widget.LinearLayout.LayoutParams(-1, -2));
 
-            final android.app.AlertDialog dlg = new android.app.AlertDialog.Builder(act).setView(box)
+            final android.app.AlertDialog dlg = FeatureMenuUi.builder(act).setView(box)
                     .setNegativeButton("关闭", null).create();
             final MenuCategory[] rendered = new MenuCategory[] { null };
             final Runnable renderPage = new Runnable() {
@@ -6414,7 +6415,7 @@ static boolean wxVersionOk(Object actObj) {
                 }
             });
             dlg.show();
-            FeatureMenuUi.styleDialog(dlg);
+            box.bind(dlg, null);
             lv.getViewTreeObserver().addOnWindowFocusChangeListener(new android.view.ViewTreeObserver.OnWindowFocusChangeListener() {
                 public void onWindowFocusChanged(boolean focused) {
                     if (!focused) return;

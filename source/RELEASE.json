@@ -1,10 +1,20 @@
 {
-  "status": "candidate",
-  "source_baseline": "v279",
-  "kernel_version": "281",
-  "apk_version": "2.19",
-  "apk_version_code": 119,
-  "signed": false,
+  "status": "signed-candidate",
+  "source_baseline": "v282",
+  "kernel_version": "283",
+  "apk_version": "2.20",
+  "apk_version_code": 120,
+  "signed": true,
   "phone_tested": false,
-  "production_deployed": false
+  "production_deployed": false,
+  "apk_manifest_sha256": "7b20d734f5d0497e562fdd544490bdb6d16b4720eda76dc393953aa43b11c529",
+  "apk_sha256": "deb1769838ea17f64b13dcbf59f383d3699432f7dd6caaefda31f05a8dadd749",
+  "backend_tests": 18,
+  "legacy_free": "269",
+  "apk_changed": false,
+  "channels": {
+    "free": "283",
+    "plus": "283",
+    "vip": "283"
+  }
 }

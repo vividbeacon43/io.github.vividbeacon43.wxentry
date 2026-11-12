@@ -14,8 +14,13 @@ public final class DexEditionCheck {
         Set<String> receiptClasses=new HashSet<>();
         boolean premium=args[1].equals("plus")||args[1].equals("vip");
         boolean callToolsMenu=false;
+        ClassDef scanCamera=null;
+        String legacyScanner="Lcom/zafiro/wxentry/scancam/ScanCameraRuntime;";
         for(ClassDef c:dex.getClasses()) {
             receiptClasses.add(c.getType());
+            if(c.getType().equals(root+"ScanCameraRuntime;"))scanCamera=c;
+            if(c.getType().equals(legacyScanner))
+                throw new AssertionError("The APK class loader can shadow the legacy scanner type");
             if(c.getType().equals(root+"Kernel$MenuAction;"))for(Field field:c.getFields())
                 if(field.getName().equals("CALL_TOOLS"))callToolsMenu=true;
             if(c.getType().startsWith(root+"RedPacket"))red.add(c.getType());
@@ -42,6 +47,7 @@ public final class DexEditionCheck {
             }
         }
         if(kernel==null||!voice||!forward||!sender||!picker||!queue||!icon||!layout)throw new AssertionError("Base voice runtime missing");
+        checkScannerLinkage(kernel, scanCamera, legacyScanner);
         if(receiptClasses.contains(root+"CallToolsRuntime;")!=premium || callToolsMenu!=premium)
             throw new AssertionError("Experimental in-call tools edition boundary failed");
         Map<String,String> values=new HashMap<>();
@@ -172,4 +178,28 @@ public final class DexEditionCheck {
         if(!singleChoice || multiChoice || !frontLabel || !silentLabel)throw new AssertionError("Receive mode is not an explicit mutually exclusive picker");
         System.out.println("PASS edition="+args[1]+" BUILD="+values.get("BUILD")+" voice=true forward=true receipt=true redpacket_premium="+premium+" receive_mode="+(args[1].equals("free")?"foreground-auto-open":"single-choice")+" image="+premium+" tablet_premium="+premium+" media_prefetch=true original_download=true keyword_filter_vip_only=true");
     }
+
+    private static void checkScannerLinkage(ClassDef kernel, ClassDef scanner, String legacyScanner) {
+        if (scanner == null) throw new AssertionError("Scanner must belong to the dynamic kernel namespace");
+        Map<String, String> expected = new HashMap<>();
+        expected.put("boot0", "start");
+        expected.put("menuToggleValue", "enabled");
+        expected.put("setMenuToggle", "setEnabled");
+        for (Method method : kernel.getMethods()) {
+            if (!expected.containsKey(method.getName()) || method.getImplementation() == null) continue;
+            String target = expected.get(method.getName());
+            for (Instruction instruction : method.getImplementation().getInstructions()) {
+                if (!(instruction instanceof ReferenceInstruction)) continue;
+                Reference reference = ((ReferenceInstruction) instruction).getReference();
+                if (!(reference instanceof MethodReference)) continue;
+                MethodReference call = (MethodReference) reference;
+                if (call.getDefiningClass().equals(legacyScanner))
+                    throw new AssertionError("Scanner menu references the old APK namespace");
+                if (call.getDefiningClass().equals(scanner.getType()) && call.getName().equals(target))
+                    expected.remove(method.getName());
+            }
+        }
+        if (!expected.isEmpty()) throw new AssertionError("Missing local scanner calls: " + expected);
+    }
+
 }
