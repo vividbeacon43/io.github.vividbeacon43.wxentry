@@ -1,1 +1,0 @@
-package android.graphics.drawable;public class StateListDrawable extends Drawable {public java.util.List<int[]> states=new java.util.ArrayList<>();public java.util.List<Drawable> drawables=new java.util.ArrayList<>();public void addState(int[] s,Drawable d){states.add(s);drawables.add(d);} }

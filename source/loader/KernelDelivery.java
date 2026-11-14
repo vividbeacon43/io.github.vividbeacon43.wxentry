@@ -7,12 +7,15 @@ import java.util.*;
 /** Authenticated four-channel delivery. Edition, version and bytes share one RSA signature. */
 public final class KernelDelivery {
     public static final class Manifest {
-        public final String edition,version,sha,signature,grantSignature;
+        public final String edition,version,sha,signature,grantSignature,downloadTicket;
         public Manifest(String e,String v,String h,String s,String grant) {
+            this(e,v,h,s,grant,null);
+        }
+        public Manifest(String e,String v,String h,String s,String grant,String ticket) {
             EditionPolicy.manifestData(e,v,h);
             if(s==null || s.length()<40 || s.length()>1024) throw new IllegalArgumentException("Invalid signature");
             if(grant==null || grant.length()<40 || grant.length()>1024) throw new IllegalArgumentException("Invalid activation grant");
-            edition=e; version=v; sha=h; signature=s; grantSignature=grant;
+            edition=e; version=v; sha=h; signature=s; grantSignature=grant; downloadTicket=ticket;
         }
         String signedData() { return EditionPolicy.manifestData(edition,version,sha); }
         String grantData(String owner) { return "kernel-grant-v1|"+owner+"|"+edition+"|"+version+"|"+sha; }

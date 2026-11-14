@@ -4,6 +4,7 @@ import android.database.Cursor;
 import java.util.*;
 
 final class ReceiptTargets {
+    private static boolean empty(String text) { return text == null || text.trim().isEmpty(); }
     static final class Target {
         final String id,name;final long lastChat;
         Target(String id,String name,long time) { this.id=id;this.name=name;lastChat=time; }
@@ -28,7 +29,7 @@ final class ReceiptTargets {
             while(cursor!=null && cursor.moveToNext()) {
                 String id=cursor.getString(0);if(!eligible(id,cursor.getInt(3),cursor.getInt(4),account))continue;
                 String remark=cursor.getString(1),nick=cursor.getString(2);
-                String name=!RedPacketEngine.empty(remark)?remark.trim():!RedPacketEngine.empty(nick)?nick.trim():id;
+                String name=!empty(remark)?remark.trim():!empty(nick)?nick.trim():id;
                 long time=Math.max(0,cursor.getLong(5));Target old=unique.get(id);
                 if(old==null || old.lastChat<time)unique.put(id,new Target(id,name,time));
             }

@@ -1,32 +1,23 @@
-# WXEntry 2.20 / 内核 v283 候选版
+# WXEntry 免费版源码 / 2.26 / v289
 
-以附件中的 v279 源码为基线。免费版、高级版和 VIP 使用粉白设置菜单。列表内容超出窗口时，底部显示滑动方向，顶部可直接检查更新。「更新公告」位于「打赏」下方。 三版「实验功能」中的「模拟相机扫码」用右侧滑块。菜单的滑块和进入子页的箭头共用同一列，开关可点击或拖动。v282 修复旧 APK 自带的扫码类覆盖热更新内核中的类，导致进入「实验功能」时读取滑块状态闪退的问题。线上 2.19 的内置 v281 还有缺失扫码类定义的问题，2.20 打包内置 v282，补齐该类。
+## 官方下载与验包
 
-v283 让模块设置菜单和更新公告跟随微信的显示模式。浅色保留粉白，深色使用深灰背景与玫粉强调色。手动选择的微信主题优先，跟随系统时使用微信解析出的当前模式。v283 可通过已安装的 2.20 模块下载。
+只从本仓库的 Releases 或官方频道置顶下载 WXEntry。官方 APK 签名证书的 SHA-256 指纹为：
 
-## 填写更新公告
-
-在服务端程序同目录维护 UTF-8 文件 `announcements.json`。每次发布内核时，在 `releases` 中增加一条，版本号填内核版本数字（字符串，不带 v），在 `added` 和 `fixed` 数组中逐项填写你自己的文字。没有新增或修复的分组可留空数组，至少一组需要有内容。日期可省略。菜单自动按内核版本从新到旧显示，修改公告无需重打 APK。
-
-下面是填写格式示例。随源码提供的 `server/announcements.json` 初始为空。
-
-```json
-{
-  "releases": [
-    {
-      "version": "283",
-      "date": "2026-11-12",
-      "added": ["填写本次新增功能"],
-      "fixed": ["填写本次修复内容"]
-    }
-  ]
-}
+```text
+87b7f91d54f8d67a367630cacfc9476b6e4d83bea7ced24cd2f7bd884b3f9d11
 ```
 
-替换线上公告文件时，先在同目录写入新文件，校验 JSON，再原子替换正式文件。菜单从 `GET /wx/kernel/announcements` 获取公告。
+用 Android SDK Build Tools 的 `apksigner verify --print-certs WXEntry.apk` 查看签名证书。文件名、包名和版本号可以相同，请核对完整证书指纹以及该 Release 提供的 APK 文件 SHA-256。第三方重签包不属于官方发布。当前官方 2.26 APK 可从 [WXEntry 更新服务器](https://walideng.fun/wx/wxentry.apk) 下载。文件 SHA-256 为 `813fa15960a82247bfbef392544dcd2b9925997b5eca8ebf72f305c00fa69f29`。
 
-## 构建和发布
 
-1. 使用 Python 3、JDK 17 和包含 `android.jar`、`xposed-api-82.jar`、`d8.jar`、`jadx-all.jar` 的依赖目录运行 `python build/build_kernels.py --java-bin <JDK-bin> --libs <依赖目录>`。要生成可上线的签名内核，在维护环境中加 `--signing-key <内核私钥>`。
-2. 运行 `python build/build_loader.py --java-bin <JDK-bin> --libs <依赖目录>`。再运行 `python build/repack_apk.py --base-apk <原签名的WXEntry-2.17.apk> --java <java.exe> --build-tools <Android构建工具目录> --output <WXEntry-2.20-unsigned.apk>`。用原 APK 证书签名候选 APK，然后按现有的签名格式 `v|name|sha256` 生成 `apk.json`。版本应是 2.20（120）。
-3. 先部署服务端接口并发布已签名 APK 与 `apk.json`，确认两者匹配，再发布三条内核通道及手写公告。新内核清单生成 `min_apk_v: 120`，服务端对旧 APK 的新内核请求返回 426。旧版用户可以先覆盖安装 2.20，再彻底退出并重新打开微信。新版加载器会先检查 APK，再按当前授权拉取相应内核。后续仅发布兼容的内核时，可以继续使用对应的 APK 版本门槛。公开的旧版免费接口读取单独保存的 v269 清单与内核，按授权下发的免费通道仍使用 v282。
+## 构建免费内核
+
+使用 JDK 17，以及包含 android.jar、xposed-api-82.jar、d8.jar 和 jadx-all.jar 的依赖目录。
+
+```text
+python build/build_kernels.py --free-only --java-bin <JDK-bin> --libs <依赖目录>
+python build/build_loader.py --java-bin <JDK-bin> --libs <依赖目录>
+```
+
+公开源码用于构建 v289 免费内核。2.26 正式签名 APK 内置 v288，可以在模块内检查更新取得 v289。

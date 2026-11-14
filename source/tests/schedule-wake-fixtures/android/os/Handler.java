@@ -1,1 +1,0 @@
-package android.os;import java.util.*;public class Handler {public final List<Runnable> work=new ArrayList<Runnable>();public long lastDelay;public boolean postDelayed(Runnable r,long ms){lastDelay=ms;work.add(r);return true;}public void drain(){List<Runnable> copy=new ArrayList<Runnable>(work);work.clear();for(Runnable r:copy)r.run();}}

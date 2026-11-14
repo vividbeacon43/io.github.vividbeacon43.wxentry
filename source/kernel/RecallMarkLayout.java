@@ -1,6 +1,7 @@
 package com.zafiro.wxentry.kernel;
 
 import android.database.Cursor;
+import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.SpannableStringBuilder;
@@ -22,6 +23,17 @@ import java.util.*;
 /** Message-owned visual annotations. Original bodies and the message table stay untouched. */
 final class RecallMarkLayout {
     static final String SUFFIX="（已撤回）";
+    private static final String READ_SUFFIX = "（已读）";
+    interface OutgoingMarkers {
+        boolean track(String account, String talker);
+        boolean marked(RecallMarkStore.Entry identity);
+    }
+    private static volatile OutgoingMarkers outgoingMarkers;
+
+    static void setOutgoingMarkers(OutgoingMarkers markers) {
+        outgoingMarkers = markers;
+        refresh();
+    }
     static final Handler MAIN=new Handler(Looper.getMainLooper());
     static final Map<View,Binding> BOUND=new WeakHashMap<View,Binding>();
     static final Map<View,Attachment> APPLIED=new WeakHashMap<View,Attachment>();
@@ -29,14 +41,31 @@ final class RecallMarkLayout {
     static final Map<View,WeakReference<View>> OWNERS=new WeakHashMap<View,WeakReference<View>>();
     static final Map<View,Binding> PENDING=new WeakHashMap<View,Binding>();
     static final ThreadLocal<Boolean> WRITING=new ThreadLocal<Boolean>();
-    static final class MarkerSpan { }
+    static final class MarkerSpan {
+        final String suffix;
+        MarkerSpan(String suffix) { this.suffix = suffix; }
+    }
     static final class Binding {
-        final RecallMarkStore.Entry identity;final String body;final WeakReference<Object> holder;
-        Binding(RecallMarkStore.Entry e,String text,Object h) { identity=e;body=text==null?"":text;holder=new WeakReference<Object>(h); }
+        final RecallMarkStore.Entry identity;
+        final String body;
+        final WeakReference<Object> holder;
+        final boolean outgoing;
+        Binding(RecallMarkStore.Entry identity, String text, Object holder, boolean outgoing) {
+            this.identity = identity;
+            this.body = text == null ? "" : text;
+            this.holder = new WeakReference<Object>(holder);
+            this.outgoing = outgoing;
+        }
     }
     static final class Attachment {
-        final WeakReference<View> inline,badge;final String written;
-        Attachment(View text,View label,String value) { inline=new WeakReference<View>(text);badge=new WeakReference<View>(label);written=value; }
+        final WeakReference<View> inline, badge;
+        final String written, suffix;
+        Attachment(View text, View label, String written, String suffix) {
+            inline = new WeakReference<View>(text);
+            badge = new WeakReference<View>(label);
+            this.written = written;
+            this.suffix = suffix;
+        }
     }
     static long bindings,renders,matched,shown,sourceChecks,sourceRejected,missingBubble,missingText,nativeRefreshes;
     static String lastError="none",lastResult="none";
@@ -77,10 +106,14 @@ final class RecallMarkLayout {
     static void bound(final View row,Object holder,Object msg,Adapter resolved) throws Throwable {
         if(row==null||!resolved.holder.isInstance(holder)||msg==null)return;
         String account=Kernel.receiptAccount();int sent=((Number)resolved.sent.invoke(msg)).intValue();
-        if(sent!=0||!ReceiptConfig.validId(account))return;
-        RecallMarkStore.Entry identity=new RecallMarkStore.Entry(account,(String)resolved.talker.invoke(msg),((Number)resolved.id.invoke(msg)).longValue(),((Number)resolved.server.invoke(msg)).longValue(),resolved.rawCreated!=null?((Number)resolved.rawCreated.get(msg)).longValue():((Number)resolved.created.invoke(msg)).longValue(),((Number)resolved.type.invoke(msg)).intValue());
-        if(!identity.rowValid())return;
-        final Binding binding=new Binding(identity,(String)resolved.content.invoke(msg),holder);
+        if ((sent != 0 && sent != 1) || !ReceiptConfig.validId(account)) return;
+        boolean outgoing = sent == 1;
+        String talker = (String)resolved.talker.invoke(msg);
+        OutgoingMarkers markers = outgoingMarkers;
+        if (outgoing && (Kernel.MODULE_OFF || markers == null || !markers.track(account, talker))) return;
+        RecallMarkStore.Entry identity=new RecallMarkStore.Entry(account,talker,((Number)resolved.id.invoke(msg)).longValue(),((Number)resolved.server.invoke(msg)).longValue(),resolved.rawCreated!=null?((Number)resolved.rawCreated.get(msg)).longValue():((Number)resolved.created.invoke(msg)).longValue(),((Number)resolved.type.invoke(msg)).intValue());
+        if (!identity.rowValid() || (outgoing && !eligibleOutgoing(identity))) return;
+        final Binding binding=new Binding(identity,(String)resolved.content.invoke(msg),holder,outgoing);
         synchronized(BOUND) { BOUND.put(row,binding);bindings++; }
         if(Looper.myLooper()==Looper.getMainLooper())render(row,binding);
         // Also refresh after the native row binder has finished subsequent formatting.
@@ -118,6 +151,33 @@ final class RecallMarkLayout {
             return copy;
         }
     }
+    private static boolean eligibleOutgoing(RecallMarkStore.Entry identity) {
+        int kind = identity.type & 0xffff;
+        return identity.server != 0 && identity.created > 0 && kind != 0 && kind != 10000 && kind != 10002;
+    }
+
+    /** Called on the main thread while handling the native typing transition. */
+    static RecallMarkStore.Entry latestVisibleOutgoing(String account, String talker, long before) {
+        if (Kernel.MODULE_OFF || !ReceiptConfig.validId(account) || !ReceiptConfig.validId(talker)
+                || !account.equals(Kernel.receiptAccount())) return null;
+        RecallMarkStore.Entry latest = null;
+        Rect visible = new Rect();
+        for (Map.Entry<View, Binding> item : snapshot()) {
+            Binding binding = item.getValue();
+            View row = item.getKey();
+            RecallMarkStore.Entry identity = binding.identity;
+            if (!binding.outgoing || !account.equals(identity.account) || !talker.equals(identity.talker)
+                    || identity.created >= before || !row.isAttachedToWindow() || !row.hasWindowFocus()
+                    || !row.isShown() || !row.getGlobalVisibleRect(visible)) continue;
+            synchronized (BOUND) {
+                if (BOUND.get(row) != binding) continue;
+            }
+            if (latest == null || identity.created > latest.created
+                    || (identity.created == latest.created && identity.local > latest.local)) latest = identity;
+        }
+        return latest;
+    }
+
     static RecallMarkStore.Entry recalled(Binding binding) {
         RecallMarkStore.Entry saved=RecallMarkStore.candidate(binding.identity);if(saved==null)return null;
         if(binding.identity.server>0&&saved.server>0&&binding.identity.server!=saved.server){sourceRejected++;lastResult="view-server-conflict";return null;}
@@ -140,8 +200,26 @@ final class RecallMarkLayout {
         if(row==null)return;
         synchronized(BOUND) { if(BOUND.get(row)!=binding)return; }
         restore(row);renders++;
-        if(!RecallTipRuntime.enabled()||!binding.identity.account.equals(Kernel.receiptAccount())){lastResult="disabled-or-account";return;}
-        RecallMarkStore.Entry saved=recalled(binding);Object holder=binding.holder.get();
+        if(!binding.identity.account.equals(Kernel.receiptAccount())){lastResult="disabled-or-account";return;}
+        RecallMarkStore.Entry saved;
+        String suffix;
+        if (binding.outgoing) {
+            OutgoingMarkers markers = outgoingMarkers;
+            if (Kernel.MODULE_OFF || markers == null) return;
+            try {
+                if (!markers.marked(binding.identity)) return;
+            } catch (RuntimeException | LinkageError unavailable) {
+                error(unavailable);
+                return;
+            }
+            saved = binding.identity;
+            suffix = READ_SUFFIX;
+        } else {
+            if (!RecallTipRuntime.enabled()) { lastResult = "disabled-or-account"; return; }
+            saved = recalled(binding);
+            suffix = SUFFIX;
+        }
+        Object holder = binding.holder.get();
         if(saved==null)return;if(holder==null||api==null){lastResult="holder-unavailable";return;}matched++;
         try {
             View bubble=(View)api.bubble.get(holder);if(bubble==null)missingBubble++;
@@ -150,9 +228,9 @@ final class RecallMarkLayout {
                 if(bubble!=null)target=findText(bubble,body(binding.body,binding.identity.talker));
                 if(target==null)target=findText(row,body(binding.body,binding.identity.talker));
                 if(target!=null) {
-                    CharSequence original=strip(read(target));CharSequence marked=decorate(original,dark(target));write(target,marked);
+                    CharSequence original=strip(read(target));CharSequence marked=decorate(original,dark(target),suffix);write(target,marked);
                     if(owned(read(target))) {
-                        synchronized(APPLIED){APPLIED.put(row,new Attachment(target,null,marked.toString()));}
+                        synchronized(APPLIED){APPLIED.put(row,new Attachment(target,null,marked.toString(),suffix));}
                         synchronized(OWNERS){OWNERS.put(target,new WeakReference<View>(row));}
                         shown++;lastResult="inline";return;
                     }
@@ -161,15 +239,18 @@ final class RecallMarkLayout {
             }
             View anchor=bubble!=null?bubble:target;
             if(anchor==null)anchor=contentAnchor(holder,row);
-            View label=badgeInRow(anchor,row);
-            if(label!=null){synchronized(APPLIED){APPLIED.put(row,new Attachment(null,label,null));}shown++;lastResult="badge";}
+            View label=badgeInRow(anchor,row,suffix);
+            if(label!=null){synchronized(APPLIED){APPLIED.put(row,new Attachment(null,label,null,suffix));}shown++;lastResult="badge";}
             else lastResult="no-safe-anchor";
         }catch(Throwable failure){error(failure);}
     }
     static View badgeInRow(View anchor,View row) {
+        return badgeInRow(anchor,row,SUFFIX);
+    }
+    private static View badgeInRow(View anchor,View row,String suffix) {
         if(!inside(anchor,row))return null;
         for(View current=anchor;current!=null&&current!=row;) {
-            View label=badge(current);if(label!=null)return label;
+            View label=badge(current,suffix);if(label!=null)return label;
             current=current.getParent() instanceof View?(View)current.getParent():null;
         }
         return null;
@@ -194,8 +275,11 @@ final class RecallMarkLayout {
     static boolean dark(View view) { return (view.getResources().getConfiguration().uiMode&0x30)==0x20; }
     static int color(boolean night) { return night?0xFFB7C2D2:0xFF7A8493; }
     static CharSequence decorate(CharSequence original,boolean night) {
-        SpannableStringBuilder text=new SpannableStringBuilder(strip(original));int start=text.length();text.append(SUFFIX);
-        text.setSpan(new MarkerSpan(),start,text.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return decorate(original,night,SUFFIX);
+    }
+    private static CharSequence decorate(CharSequence original, boolean night, String suffix) {
+        SpannableStringBuilder text=new SpannableStringBuilder(strip(original));int start=text.length();text.append(suffix);
+        text.setSpan(new MarkerSpan(suffix),start,text.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         text.setSpan(new ForegroundColorSpan(color(night)),start,text.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         text.setSpan(new RelativeSizeSpan(0.82f),start,text.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);return text;
     }
@@ -204,7 +288,7 @@ final class RecallMarkLayout {
         if(text==null)return "";if(!(text instanceof Spanned))return text;
         Spanned spans=(Spanned)text;MarkerSpan[] own=spans.getSpans(0,text.length(),MarkerSpan.class);if(own.length==0)return text;
         List<int[]> ranges=new ArrayList<int[]>();
-        for(MarkerSpan marker:own) { int a=spans.getSpanStart(marker),b=spans.getSpanEnd(marker);if(a>=0&&b<=text.length()&&a<b&&text.subSequence(a,b).toString().equals(SUFFIX))ranges.add(new int[]{a,b}); }
+        for(MarkerSpan marker:own) { int a=spans.getSpanStart(marker),b=spans.getSpanEnd(marker);if(a>=0&&b<=text.length()&&a<b&&text.subSequence(a,b).toString().equals(marker.suffix))ranges.add(new int[]{a,b}); }
         Collections.sort(ranges,new Comparator<int[]>() { public int compare(int[] a,int[] b) { return b[0]-a[0]; } });
         SpannableStringBuilder clean=new SpannableStringBuilder(text);for(int[] range:ranges)clean.delete(range[0],range[1]);return clean;
     }
@@ -214,8 +298,8 @@ final class RecallMarkLayout {
             synchronized(OWNERS){WeakReference<View> owner=OWNERS.get(text);if(owner!=null&&owner.get()==row)OWNERS.remove(text);}
             CharSequence current=read(text);
             if(owned(current))write(text,strip(current));
-            else if(previous.written!=null&&current!=null&&previous.written.equals(current.toString())&&current.toString().endsWith(SUFFIX)) {
-                SpannableStringBuilder clean=new SpannableStringBuilder(current);clean.delete(clean.length()-SUFFIX.length(),clean.length());write(text,clean);
+            else if(previous.written!=null&&current!=null&&previous.written.equals(current.toString())&&current.toString().endsWith(previous.suffix)) {
+                SpannableStringBuilder clean=new SpannableStringBuilder(current);clean.delete(clean.length()-previous.suffix.length(),clean.length());write(text,clean);
             }
         } }
         catch(Throwable failure) { error(failure); }
@@ -246,9 +330,9 @@ final class RecallMarkLayout {
         try { if(text instanceof TextView)((TextView)text).setText(value,TextView.BufferType.SPANNABLE);else api.neatSet.invoke(text,value,TextView.BufferType.SPANNABLE,null); }
         finally { if(previous==null)WRITING.remove();else WRITING.set(previous); }
     }
-    static View badge(View bubble) {
+    private static View badge(View bubble,String suffix) {
         if(!(bubble.getParent() instanceof ViewGroup)||bubble.getVisibility()!=View.VISIBLE)return null;
-        ViewGroup parent=(ViewGroup)bubble.getParent();TextView label=new TextView(bubble.getContext());label.setText(SUFFIX);label.setTextSize(12);
+        ViewGroup parent=(ViewGroup)bubble.getParent();TextView label=new TextView(bubble.getContext());label.setText(suffix);label.setTextSize(12);
         label.setTextColor(color(dark(bubble)));label.setClickable(false);label.setLongClickable(false);label.setFocusable(false);
         int gap=Math.max(1,Math.round(2*bubble.getResources().getDisplayMetrics().density));
         if(parent instanceof RelativeLayout&&bubble.getId()!=View.NO_ID) {

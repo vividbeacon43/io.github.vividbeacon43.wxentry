@@ -22,6 +22,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 final class FeatureMenuUi {
+    static final int ROW_HEIGHT = SettingsUi.CONTROL_SIZE + 4;
+    static final int ROW_GAP = 4;
+
     enum Tone {
         INK, MUTED, ROSE;
 
@@ -119,7 +122,7 @@ final class FeatureMenuUi {
 
     static void styleList(ListView list, MenuPalette palette) {
         list.setDivider(new ColorDrawable(palette.surface));
-        list.setDividerHeight(SettingsUi.dp(list.getContext(), 6));
+        list.setDividerHeight(SettingsUi.dp(list.getContext(), ROW_GAP));
     }
 
     static LinearLayout column(Context context) {
@@ -149,7 +152,7 @@ final class FeatureMenuUi {
 
     private static void paintCard(View view, CardStyle style, MenuPalette palette) {
         Context context = view.getContext();
-        GradientDrawable background = shape(context, style == CardStyle.EMPHASIS ? palette.highlight : palette.card, 14);
+        GradientDrawable background = shape(context, style == CardStyle.EMPHASIS ? palette.highlight : palette.card, 11);
         view.setBackground(style == CardStyle.PLAIN ? background
                 : new RippleDrawable(ColorStateList.valueOf(palette.ripple), background, null));
     }
@@ -157,13 +160,13 @@ final class FeatureMenuUi {
     static View row(Context context, String label, boolean category, boolean update) {
         LinearLayout row = new LinearLayout(context);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        pad(row, 14, 8);
-        row.setMinimumHeight(SettingsUi.dp(context, SettingsUi.ROW_HEIGHT));
+        pad(row, 13, 2);
+        row.setMinimumHeight(SettingsUi.dp(context, ROW_HEIGHT));
         card(row, update, true);
-        TextView title = text(context, label, 16, update ? Tone.ROSE : Tone.INK);
+        TextView title = text(context, label, 15, update ? Tone.ROSE : Tone.INK);
         if (category || update) title.setTypeface(Typeface.DEFAULT_BOLD);
         row.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView arrow = text(context, "›", 22, Tone.ROSE);
+        TextView arrow = text(context, "›", 19, Tone.ROSE);
         arrow.setGravity(Gravity.CENTER);
         arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         row.addView(arrow, SettingsUi.controlSlot(context));
@@ -174,10 +177,13 @@ final class FeatureMenuUi {
                                       boolean checked, SettingsUi.Change change) {
         SettingsUi.ToggleRow row = SettingsUi.toggle(context, label, detail, checked, change);
         MenuPalette palette = MenuPalette.current(context);
+        row.setMinimumHeight(SettingsUi.dp(context, ROW_HEIGHT));
+        row.title.setTextSize(15);
         row.title.setTextColor(palette.text);
+        row.subtitle.setTextSize(11);
         row.subtitle.setTextColor(palette.muted);
         row.control.setMenuPalette(palette);
-        pad(row, 14, 8);
+        pad(row, 13, 2);
         card(row, false, true);
         return row;
     }
@@ -194,7 +200,7 @@ final class FeatureMenuUi {
 
     static void wireScrollHint(final ListView list, final TextView hint) {
         hint.setGravity(Gravity.CENTER);
-        hint.setMinHeight(SettingsUi.dp(list.getContext(), 30));
+        hint.setMinHeight(SettingsUi.dp(list.getContext(), 24));
         hint.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_NONE);
         list.setOnScrollListener(new AbsListView.OnScrollListener() {
             public void onScrollStateChanged(AbsListView view, int state) {}

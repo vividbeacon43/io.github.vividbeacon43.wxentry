@@ -1,3 +1,0 @@
-package com.zafiro.wxentry.kernel;
-public class Kernel {public static Object currentDb;public static Object db0(){return currentDb;}public static boolean MODULE_OFF,NO_TIP,off;public static String account="account";public static ClassLoader APP_CL=Kernel.class.getClassLoader();public static final String WXDIR="test/";public static final String AR_OFF_PATH="antirevoke.off";public static java.util.List<String> logs=new java.util.ArrayList<>();public static boolean f(String p){return off;}public static String receiptAccount(){return account;}public static android.database.Cursor rawQuery(Object db,String sql,String[] args){return ((FakeMessageDb)db).query(sql,args);}public static void T(String value){logs.add(value);}}
-

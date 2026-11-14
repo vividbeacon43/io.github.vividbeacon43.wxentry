@@ -1,1 +1,0 @@
-package com.zafiro.wxentry.kernel;final class SnsScheduleStore {static SnsScheduleData data;static boolean fail;static SnsScheduleData load(String a){if(fail)throw new IllegalStateException();return data;}}

@@ -21,15 +21,15 @@ final class RecallMarkStore {
     }
     static Snapshot cached;
     static String readError="none";
-    static String path(String account) { return Kernel.WXDIR+"recall-inline."+RedPacketRuntime.hash(account).substring(0,16); }
+    static String path(String account) { return Kernel.WXDIR+"recall-inline."+ModuleState.hash(account).substring(0,16); }
     static Snapshot load(String account) {
         if(!ReceiptConfig.validId(account))throw new IllegalArgumentException("Invalid recall account");
         if(cached!=null&&cached.owner.equals(account))return cached;
-        Snapshot snapshot=new Snapshot(account);String data=RedPacketRuntime.read(path(account));
+        Snapshot snapshot=new Snapshot(account);String data=ModuleState.read(path(account));
         if(data!=null) {
             if(data.length()>4000000)throw new IllegalStateException("Recall state too large");
             String[] lines=data.split("\n");
-            if(lines.length<2||!lines[0].equals("format=1")||!lines[1].equals("owner="+RedPacketRuntime.hash(account)))throw new IllegalStateException("Invalid recall state");
+            if(lines.length<2||!lines[0].equals("format=1")||!lines[1].equals("owner="+ModuleState.hash(account)))throw new IllegalStateException("Invalid recall state");
             for(int i=2;i<lines.length;i++) {
                 if(lines[i].isEmpty())continue;String[] p=lines[i].split("\t",-1);if(p.length!=5)throw new IllegalStateException("Invalid recall entry");
                 Entry entry=new Entry(account,p[4],Long.parseLong(p[0]),Long.parseLong(p[1]),Long.parseLong(p[2]),Integer.parseInt(p[3]));
@@ -54,9 +54,9 @@ final class RecallMarkStore {
         if(entry.matches(previous))return false;
         LinkedHashMap<String,Entry> next=new LinkedHashMap<String,Entry>(snapshot.entries);next.remove(entry.key());next.put(entry.key(),entry);
         while(next.size()>MAX)next.remove(next.keySet().iterator().next());
-        StringBuilder text=new StringBuilder("format=1\nowner="+RedPacketRuntime.hash(entry.account)+"\n");
+        StringBuilder text=new StringBuilder("format=1\nowner="+ModuleState.hash(entry.account)+"\n");
         for(Entry saved:next.values())text.append(saved.line()).append('\n');
-        if(!RedPacketRuntime.write(path(entry.account),text.toString()))return false;
+        if(!ModuleState.write(path(entry.account),text.toString()))return false;
         snapshot.entries.clear();snapshot.entries.putAll(next);return true;
     }
 }

@@ -12,7 +12,6 @@ import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -22,10 +21,17 @@ final class VoiceTextRuntime {
     private static final long RETRY_MS = 700L;
     private static final long DOWNLOAD_RETRY_MS = 3000L;
     private static final int CHECKS_PER_TICK = 12;
+    private static final int MAX_PENDING = 32;
+    private static final int MAX_SEEN = 128;
+    private static final long MAX_PENDING_AGE_MS = 120_000L;
+    private static final long SERVER_TIME_GRACE_MS = 1_000L;
+    private static final String AUTOMATIC_CALLBACK = "wxentry.voiceText.automatic";
+    private static final ThreadLocal<Boolean> STARTING_AUTOMATIC = new ThreadLocal<>();
+    private static final ThreadLocal<Object> AUTOMATIC_COMPONENT = new ThreadLocal<>();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static volatile Session current;
     private static volatile boolean ready;
-    private static Class<?> componentInterface, componentType, adapterInterface, adapterType, messageType, voiceKeyInterface;
+    private static Class<?> componentInterface, componentType, messageType, voiceKeyInterface;
     private static Method nativeStart, nativeDownloaded, fileBytes, findService, getNetwork, findMessage;
 
     private VoiceTextRuntime() {}
@@ -61,7 +67,7 @@ final class VoiceTextRuntime {
     private static String owner() {
         if (!ready || Kernel.MODULE_OFF) return null;
         String account = Kernel.receiptAccount();
-        return ReceiptConfig.validId(account) && !"null".equals(account) ? RedPacketRuntime.hash(account) : null;
+        return ReceiptConfig.validId(account) && !"null".equals(account) ? ModuleState.hash(account) : null;
     }
 
     private static SharedPreferences settings() {
@@ -78,7 +84,6 @@ final class VoiceTextRuntime {
         Class<?> chat = Class.forName("wk5.d", false, loader);
         Class<?> fragment = Class.forName("com.tencent.mm.ui.chatting.ChattingUIFragment", false, loader);
         Class<?> baseFragment = Class.forName("com.tencent.mm.ui.chatting.BaseChattingUIFragment", false, loader);
-        Class<?> dataChange = Class.forName("yt3.r1", false, loader);
         Class<?> actions = Class.forName("com.tencent.mm.ui.chatting.viewitems.sq", false, loader);
         Class<?> files = Class.forName("q71.c1", false, loader);
         Class<?> serviceLocator = Class.forName("fi5.n0", false, loader);
@@ -87,15 +92,12 @@ final class VoiceTextRuntime {
         Class<?> messageLookup = Class.forName("yx0.k0", false, loader);
         componentInterface = Class.forName("qk5.n2", false, loader);
         componentType = Class.forName("com.tencent.mm.ui.chatting.component.gp", false, loader);
-        adapterInterface = Class.forName("qk5.a0", false, loader);
-        adapterType = Class.forName("com.tencent.mm.ui.chatting.adapter.k", false, loader);
         messageType = Class.forName("com.tencent.mm.storage.f9", false, loader);
         voiceKeyInterface = Class.forName("vv.h1", false, loader);
 
         Method resume = fragment.getDeclaredMethod("K0");
         Method pause = fragment.getDeclaredMethod("J0");
         Method exit = fragment.getDeclaredMethod("b1");
-        Method dataReady = adapterType.getDeclaredMethod("n", dataChange);
         Method inserted = storage.getDeclaredMethod("a", messageType, boolean.class, boolean.class);
         nativeStart = actions.getDeclaredMethod("c", int.class, chat, messageType, componentInterface, boolean.class, int.class);
         nativeDownloaded = actions.getDeclaredMethod("p", messageType);
@@ -105,10 +107,8 @@ final class VoiceTextRuntime {
         findMessage = messageLookup.getDeclaredMethod("k2", String.class, long.class);
         findMessage.setAccessible(true);
         baseFragment.getDeclaredField("f");
+        messageType.getMethod("getCreateTime");
         chat.getDeclaredField("i");
-        adapterType.getDeclaredField("K");
-        adapterType.getDeclaredMethod("W0", int.class);
-        adapterType.getDeclaredMethod("getCount");
         componentType.getDeclaredMethod("C0", long.class, String.class);
         componentType.getDeclaredMethod("y0", long.class);
         componentType.getDeclaredField("m");
@@ -119,6 +119,7 @@ final class VoiceTextRuntime {
             throw new NoSuchMethodException("Voice transcript contract changed");
         }
 
+        hookAutomaticResult(loader);
         XposedBridge.hookMethod(resume, new XC_MethodHook() {
             @Override protected void afterHookedMethod(MethodHookParam p) {
                 if (!ready || p.hasThrowable()) return;
@@ -131,30 +132,17 @@ final class VoiceTextRuntime {
         });
         XposedBridge.hookMethod(pause, endHook(false));
         XposedBridge.hookMethod(exit, endHook(true));
-        XposedBridge.hookMethod(dataReady, new XC_MethodHook() {
-            @Override protected void afterHookedMethod(MethodHookParam p) {
-                Session session = current;
-                if (session == null || p.hasThrowable()) return;
-                try {
-                    if (session.chat.get() == XposedHelpers.getObjectField(p.thisObject, "K")) {
-                        MAIN.removeCallbacks(session.scan);
-                        MAIN.post(session.scan);
-                    }
-                } catch (Throwable failure) {
-                    logError("adapter", failure);
-                }
-            }
-        });
         XposedBridge.hookMethod(inserted, new XC_MethodHook() {
             @Override protected void afterHookedMethod(MethodHookParam p) {
                 Session session = current;
                 if (session == null || Kernel.MODULE_OFF || p.hasThrowable()
                         || !(p.getResult() instanceof Number) || ((Number) p.getResult()).longValue() <= 0) return;
                 try {
-                    Voice voice = readVoice(p.args[0], session.talker, true);
+                    Voice voice = readVoice(p.args[0], session.talker);
                     if (voice == null) return;
+                    long arrivedAt = SystemClock.uptimeMillis();
                     MAIN.post(() -> {
-                        if (current == session) session.enqueue(voice);
+                        if (current == session) session.enqueue(voice, arrivedAt);
                     });
                 } catch (Throwable failure) {
                     logError("insert", failure);
@@ -162,7 +150,61 @@ final class VoiceTextRuntime {
             }
         });
         ready = true;
-        Kernel.T("ARVOICETEXT ready native=voice-transform scope=loaded-and-new");
+        Kernel.T("ARVOICETEXT ready native=voice-transform scope=new-only");
+    }
+
+    private static void hookAutomaticResult(ClassLoader loader) throws ReflectiveOperationException {
+        Class<?> callback = Class.forName("com.tencent.mm.ui.chatting.component.cp", false, loader);
+        Class<?> event = Class.forName("com.tencent.mm.autogen.events.ExtTranslateVoiceEvent", false, loader);
+        Class<?> completed = Class.forName("com.tencent.mm.ui.chatting.component.fp", false, loader);
+        java.lang.reflect.Constructor<?> callbackConstructor =
+                callback.getDeclaredConstructor(componentType, event, int.class, messageType);
+        java.lang.reflect.Constructor<?> completedConstructor =
+                completed.getDeclaredConstructor(messageType, int.class);
+        Method run = callback.getDeclaredMethod("run");
+        Method scroll = componentType.getDeclaredMethod("J0", int.class);
+        java.lang.reflect.Field callbackComponent = callback.getDeclaredField("g");
+        callbackComponent.setAccessible(true);
+        if (callbackComponent.getType() != componentType || run.getReturnType() != void.class
+                || scroll.getReturnType() != void.class) {
+            throw new NoSuchMethodException("Voice transcript callback contract changed");
+        }
+
+        XposedBridge.hookMethod(callbackConstructor, new XC_MethodHook() {
+            @Override protected void afterHookedMethod(MethodHookParam p) {
+                if (Boolean.TRUE.equals(STARTING_AUTOMATIC.get()) && !p.hasThrowable()) {
+                    XposedHelpers.setAdditionalInstanceField(p.thisObject, AUTOMATIC_CALLBACK, Boolean.TRUE);
+                }
+            }
+        });
+        XposedBridge.hookMethod(run, new XC_MethodHook() {
+            @Override protected void beforeHookedMethod(MethodHookParam p) throws IllegalAccessException {
+                p.setObjectExtra(AUTOMATIC_CALLBACK, AUTOMATIC_COMPONENT.get());
+                if (Boolean.TRUE.equals(XposedHelpers.getAdditionalInstanceField(p.thisObject, AUTOMATIC_CALLBACK))) {
+                    AUTOMATIC_COMPONENT.set(callbackComponent.get(p.thisObject));
+                } else {
+                    AUTOMATIC_COMPONENT.remove();
+                }
+            }
+
+            @Override protected void afterHookedMethod(MethodHookParam p) {
+                Object previous = p.getObjectExtra(AUTOMATIC_CALLBACK);
+                if (previous == null) AUTOMATIC_COMPONENT.remove();
+                else AUTOMATIC_COMPONENT.set(previous);
+            }
+        });
+        XposedBridge.hookMethod(scroll, new XC_MethodHook() {
+            @Override protected void beforeHookedMethod(MethodHookParam p) {
+                // WeChat recalculates the adapter position when partial/final text arrives.
+                if (AUTOMATIC_COMPONENT.get() == p.thisObject) p.args[0] = -1;
+            }
+        });
+        XposedBridge.hookMethod(completedConstructor, new XC_MethodHook() {
+            @Override protected void beforeHookedMethod(MethodHookParam p) {
+                // The completion event reuses this position to start the adjacent message.
+                if (AUTOMATIC_COMPONENT.get() != null) p.args[1] = -1;
+            }
+        });
     }
 
     private static XC_MethodHook endHook(boolean leaving) {
@@ -196,10 +238,11 @@ final class VoiceTextRuntime {
             session = new Session(chat, owner, talker, since);
             current = session;
         }
-        session.resumed = true;
-        MAIN.removeCallbacks(session.scan);
-        MAIN.post(session.scan);
-        session.schedule(260L);
+        if (!session.resumed) {
+            session.activeFrom = System.currentTimeMillis();
+            session.activeSinceUptime = SystemClock.uptimeMillis();
+            session.resumed = true;
+        }
     }
 
     private static void closeSession() {
@@ -208,12 +251,13 @@ final class VoiceTextRuntime {
         if (session != null) session.pause();
     }
 
-    private static Voice readVoice(Object message, String talker, boolean incoming) {
+    private static Voice readVoice(Object message, String talker) {
         if (!messageType.isInstance(message) || number(message, "getType") != 34
                 || number(message, "A0") != 0 || !talker.equals(XposedHelpers.callMethod(message, "O0"))) return null;
         long id = number(message, "getMsgId");
         long server = number(message, "G0");
-        return id > 0 && server != 0 ? new Voice(id, server, incoming) : null;
+        return id > 0 && server != 0
+                ? new Voice(id, server, number(message, "getCreateTime")) : null;
     }
 
     private static long number(Object object, String method) {
@@ -226,15 +270,15 @@ final class VoiceTextRuntime {
     }
 
     private static final class Voice {
-        final long id, server;
-        final boolean incoming;
+        final long id, server, created;
+        long expiresAt;
         long checkAfter;
         int lookupRetries;
 
-        Voice(long id, long server, boolean incoming) {
+        Voice(long id, long server, long created) {
             this.id = id;
             this.server = server;
-            this.incoming = incoming;
+            this.created = created;
         }
     }
 
@@ -242,10 +286,10 @@ final class VoiceTextRuntime {
         final WeakReference<Object> chat;
         final String owner, talker;
         final long since;
-        final Map<Long, Long> seen = new HashMap<>();
+        final LinkedHashMap<Long, Long> seen = new LinkedHashMap<>();
         final LinkedHashMap<Long, Voice> pending = new LinkedHashMap<>();
-        final Runnable scan = this::scanLoaded;
         boolean resumed;
+        long activeFrom, activeSinceUptime;
         long scheduledAt = Long.MAX_VALUE;
 
         Session(Object chat, String owner, String talker, long since) {
@@ -266,33 +310,26 @@ final class VoiceTextRuntime {
 
         void pause() {
             resumed = false;
-            MAIN.removeCallbacks(scan);
+            pending.clear();
             MAIN.removeCallbacks(this);
             scheduledAt = Long.MAX_VALUE;
         }
 
-        void enqueue(Voice voice) {
+        void enqueue(Voice voice, long arrivedAt) {
+            if (!resumed || arrivedAt < activeSinceUptime || !isFresh(voice.created)) return;
             Long prior = seen.put(voice.id, voice.server);
             if (prior != null && prior.longValue() == voice.server) return;
+            if (seen.size() > MAX_SEEN) seen.remove(seen.keySet().iterator().next());
+            if (pending.size() >= MAX_PENDING && !pending.containsKey(voice.id)) {
+                pending.remove(pending.keySet().iterator().next());
+            }
+            voice.expiresAt = arrivedAt + MAX_PENDING_AGE_MS;
             pending.put(voice.id, voice);
             schedule(260L);
         }
 
-        void scanLoaded() {
-            if (!resumed) return;
-            try {
-                Object context = chat.get();
-                if (!owns(context)) return;
-                Object adapter = XposedHelpers.callMethod(context, "a", adapterInterface);
-                if (!adapterType.isInstance(adapter)) return;
-                int count = (int) number(adapter, "getCount");
-                for (int position = 0; position < count; position++) {
-                    Voice voice = readVoice(XposedHelpers.callMethod(adapter, "W0", position), talker, false);
-                    if (voice != null) enqueue(voice);
-                }
-            } catch (Throwable failure) {
-                logError("scan", failure);
-            }
+        boolean isFresh(long created) {
+            return created > 0 && created >= activeFrom - SERVER_TIME_GRACE_MS;
         }
 
         void schedule(long delay) {
@@ -307,6 +344,9 @@ final class VoiceTextRuntime {
         @Override public void run() {
             scheduledAt = Long.MAX_VALUE;
             if (!resumed || pending.isEmpty()) return;
+            long now = SystemClock.uptimeMillis();
+            pending.values().removeIf(voice -> voice.expiresAt <= now);
+            if (pending.isEmpty()) return;
             try {
                 Object context = chat.get();
                 if (!owns(context)) {
@@ -355,14 +395,15 @@ final class VoiceTextRuntime {
                 }
                 try {
                     Object message = findMessage.invoke(null, talker, voice.id);
-                    Voice latest = readVoice(message, talker, voice.incoming);
-                    if (latest == null && voice.incoming && voice.lookupRetries++ < 3
+                    Voice latest = readVoice(message, talker);
+                    if (latest == null && voice.lookupRetries++ < 3
                             && (!messageType.isInstance(message) || number(message, "getMsgId") <= 0)) {
                         voice.checkAfter = now + RETRY_MS;
                         next = Math.min(next, voice.checkAfter);
                         continue;
                     }
                     if (latest == null || latest.server != voice.server || latest.id != voice.id
+                            || !isFresh(latest.created)
                             || Boolean.TRUE.equals(XposedHelpers.callMethod(message, "U2"))
                             || Boolean.TRUE.equals(XposedHelpers.callMethod(message, "a2"))) {
                         rows.remove();
@@ -383,9 +424,14 @@ final class VoiceTextRuntime {
                     if (clientKey == null || clientKey.isEmpty()) continue;
                     String transcript = (String) XposedHelpers.callMethod(component, "C0", voice.id, clientKey);
                     if (transcript != null && !transcript.trim().isEmpty()) continue;
-                    // Negative position prevents a scroll. The fourth native option preserves the unread audio marker.
-                    nativeStart.invoke(null, -1, context, message, component, false, 3);
-                    Kernel.T("ARVOICETEXT native-request source=" + (voice.incoming ? "arrival" : "loaded"));
+                    // Preserve the unread audio marker and mark only this native request.
+                    STARTING_AUTOMATIC.set(Boolean.TRUE);
+                    try {
+                        nativeStart.invoke(null, -1, context, message, component, false, 3);
+                    } finally {
+                        STARTING_AUTOMATIC.remove();
+                    }
+                    Kernel.T("ARVOICETEXT native-request source=arrival");
                     next = Math.min(next, now + RETRY_MS);
                     break;
                 } catch (Throwable failure) {

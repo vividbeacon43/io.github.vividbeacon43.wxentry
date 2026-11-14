@@ -8,27 +8,34 @@ import android.view.View;
 import java.util.*;
 
 final class ReceiptSettings {
+    static void toast(Activity act,String message) { android.widget.Toast.makeText(act,message,android.widget.Toast.LENGTH_SHORT).show(); }
+    static boolean setFlag(String path,boolean enabled) {
+        try {
+            java.io.File file=new java.io.File(path);
+            if(enabled) { file.getParentFile().mkdirs();return file.exists() || file.createNewFile(); }
+            return !file.exists() || file.delete();
+        } catch(Throwable failure) { return false; }
+    }
+
     static boolean access(Activity act,ReceiptConfig.Feature feature) {
-        return feature!=ReceiptConfig.Feature.TRANSFER || RedPacketSettings.requirePremium(act);
+        return feature!=ReceiptConfig.Feature.TRANSFER || Kernel.transferSettingsAllowed(act);
     }
     static boolean sameAccount(Activity act,String account) {
         if(account.equals(Kernel.receiptAccount()))return true;
-        RedPacketSettings.toast(act,"账号已切换，请重新打开设置");return false;
+        toast(act,"账号已切换，请重新打开设置");return false;
     }
     static boolean enabled(ReceiptConfig.Feature feature) { return ReceiptStore.enabled(feature); }
     static void toggle(Activity act,ReceiptConfig.Feature feature,Runnable refresh) {
         if(!access(act,feature))return;
         try {
             String account=ReceiptStore.account();ReceiptConfig config=ReceiptStore.load(feature,account);
-            if(feature==ReceiptConfig.Feature.TRANSFER && !config.enabled && !TransferRuntime.ready()) {
-                RedPacketSettings.toast(act,TransferRuntime.unavailable());return;
-            }
+            if(feature==ReceiptConfig.Feature.TRANSFER && !config.enabled && !Kernel.transferSettingsReady(act))return;
             config.enabled=!config.enabled;
             if(!ReceiptStore.save(feature,account,config))throw new IllegalStateException("保存失败");
-            if(feature==ReceiptConfig.Feature.RED_PACKET)RedPacketSettings.setFlag(Kernel.RP_ON_PATH,config.enabled);
+            if(feature==ReceiptConfig.Feature.RED_PACKET)setFlag(Kernel.RP_ON_PATH,config.enabled);
             if(refresh!=null)refresh.run();
-            RedPacketSettings.toast(act,feature.label+"自动处理已"+(config.enabled?"开启":"关闭"));
-        } catch(Throwable failure) { RedPacketSettings.toast(act,"设置保存失败，请确认当前账号已就绪"); }
+            toast(act,feature.label+"自动处理已"+(config.enabled?"开启":"关闭"));
+        } catch(Throwable failure) { toast(act,"设置保存失败，请确认当前账号已就绪"); }
     }
     static void lists(final Activity act,final ReceiptConfig.Feature feature) {
         if(!access(act,feature))return;
@@ -55,24 +62,24 @@ final class ReceiptSettings {
                             } });box.addView(row);
                         }
                     }
-                } catch(Throwable failure) { RedPacketSettings.toast(act,"名单设置暂时无法读取"); }
+                } catch(Throwable failure) { toast(act,"名单设置暂时无法读取"); }
             } };render[0].run();
             ScrollView scroll=new ScrollView(act);scroll.addView(box);
             new AlertDialog.Builder(act).setTitle(feature.label+"黑白名单").setView(scroll).setNegativeButton("关闭",null).show();
-        } catch(Throwable failure) { RedPacketSettings.toast(act,"名单设置暂时无法读取，自动处理保持停止"); }
+        } catch(Throwable failure) { toast(act,"名单设置暂时无法读取，自动处理保持停止"); }
     }
     static boolean changeRule(Activity act,ReceiptConfig.Feature feature,ReceiptConfig.Scope scope,String account,int kind,boolean on,Runnable render) {
         if(sameAccount(act,account)&&access(act,feature))try {
             ReceiptConfig config=ReceiptStore.load(feature,account);ReceiptConfig.ListRule rule=config.scope(scope);
             if(kind==0)rule.setEnabled(on);else if(rule.rule!=ReceiptConfig.Rule.OFF)rule.setList(kind==1,on);
             if(!ReceiptStore.save(feature,account,config))throw new IllegalStateException();
-        } catch(Throwable failure) { RedPacketSettings.toast(act,"规则保存失败，已保持原状态"); }
+        } catch(Throwable failure) { toast(act,"规则保存失败，已保持原状态"); }
         if(render!=null)render.run();
         ReceiptConfig.Rule saved=ReceiptStore.load(feature,account).scope(scope).rule;
         return kind==0?saved!=ReceiptConfig.Rule.OFF:saved==(kind==1?ReceiptConfig.Rule.WHITE:ReceiptConfig.Rule.BLACK);
     }
     static void picker(final Activity act,final ReceiptConfig.Feature feature,final ReceiptConfig.Scope scope,final boolean white,final String account,final Runnable refresh) {
-        RedPacketSettings.toast(act,"正在按最近聊天时间读取列表…");
+        toast(act,"正在按最近聊天时间读取列表…");
         new Thread(new Runnable() { public void run() {
             try {
                 ReceiptConfig config=ReceiptStore.load(feature,account);
@@ -82,7 +89,7 @@ final class ReceiptSettings {
                     if(act.isFinishing() || act.isDestroyed() || !sameAccount(act,account) || !access(act,feature))return;
                     buildPicker(act,feature,scope,white,account,all,selected,refresh);
                 } });
-            } catch(Throwable failure) { act.runOnUiThread(new Runnable() { public void run() { RedPacketSettings.toast(act,"无法读取聊天时间，请稍后重试"); } }); }
+            } catch(Throwable failure) { act.runOnUiThread(new Runnable() { public void run() { toast(act,"无法读取聊天时间，请稍后重试"); } }); }
         } },"wxentry-receipt-list").start();
     }
     static void buildPicker(final Activity act,final ReceiptConfig.Feature feature,final ReceiptConfig.Scope scope,final boolean white,final String account,
@@ -129,8 +136,8 @@ final class ReceiptSettings {
             Set<String> list=white?rule.white:rule.black;list.clear();list.addAll(ids);
             if(use)rule.setList(white,true);
             if(!ReceiptStore.save(feature,account,config))throw new IllegalStateException();
-            RedPacketSettings.toast(act,"已保存 "+ids.size()+" 项");if(refresh!=null)refresh.run();
-        } catch(Throwable failure) { RedPacketSettings.toast(act,"名单保存失败"); }
+            toast(act,"已保存 "+ids.size()+" 项");if(refresh!=null)refresh.run();
+        } catch(Throwable failure) { toast(act,"名单保存失败"); }
     }
     static void delay(final Activity act,final ReceiptConfig.Feature feature,final Runnable refresh) {
         if(!access(act,feature))return;
@@ -156,11 +163,11 @@ final class ReceiptSettings {
                             if(!ReceiptStore.save(feature,account,config))throw new IllegalStateException("延时保存失败");
                             dialog.dismiss();if(refresh!=null)refresh.run();
                         } catch(IllegalArgumentException invalid) { min.setError(invalid.getMessage()); }
-                        catch(Throwable failure) { RedPacketSettings.toast(act,"延时保存失败"); }
+                        catch(Throwable failure) { toast(act,"延时保存失败"); }
                     }
                 }); }
             });dialog.show();
-        } catch(Throwable failure) { RedPacketSettings.toast(act,"延时设置暂时无法读取"); }
+        } catch(Throwable failure) { toast(act,"延时设置暂时无法读取"); }
     }
     static boolean delayEnabled(ReceiptConfig.Feature feature) {
         try { return ReceiptStore.current(feature).delayEnabled; }catch(Throwable unavailable) { return false; }
@@ -169,7 +176,7 @@ final class ReceiptSettings {
         if(access(act,feature))try {
             String account=ReceiptStore.account();ReceiptConfig config=ReceiptStore.load(feature,account);config.delayEnabled=on;
             if(!ReceiptStore.save(feature,account,config))throw new IllegalStateException();
-        } catch(Throwable failure) { RedPacketSettings.toast(act,"延时开关保存失败，已保持原状态"); }
+        } catch(Throwable failure) { toast(act,"延时开关保存失败，已保持原状态"); }
         if(refresh!=null)refresh.run();return delayEnabled(feature);
     }
     static String delayRangeLabel(ReceiptConfig.Feature feature) {
@@ -182,7 +189,7 @@ final class ReceiptSettings {
     }
     static boolean keywordAccess(Activity act,ReceiptConfig.Feature feature) {
         if(feature!=ReceiptConfig.Feature.ORIGINAL_IMAGE && Kernel.receiptKeywordsEnabled())return true;
-        RedPacketSettings.toast(act,"关键词过滤仅限 VIP 版");return false;
+        toast(act,"关键词过滤仅限 VIP 版");return false;
     }
     static String keywordLabel(ReceiptConfig.Feature feature) {
         try {
@@ -230,11 +237,11 @@ final class ReceiptSettings {
                         c.keywords.match=modes.getCheckedRadioButtonId()==0x75260002?ReceiptConfig.KeywordMatch.EXACT:ReceiptConfig.KeywordMatch.FUZZY;
                         c.keywords.setWords(words.getText().toString());c.keywords.validate();
                         if(!ReceiptStore.save(feature,account,c))throw new IllegalStateException();
-                        dialog.dismiss();if(refresh!=null)refresh.run();RedPacketSettings.toast(act,"关键词过滤已保存");
+                        dialog.dismiss();if(refresh!=null)refresh.run();toast(act,"关键词过滤已保存");
                     }catch(IllegalArgumentException invalid){words.setError(invalid.getMessage());}
-                    catch(Throwable failure){RedPacketSettings.toast(act,"关键词设置保存失败，保持原状态");}
+                    catch(Throwable failure){toast(act,"关键词设置保存失败，保持原状态");}
                 }});
             }});dialog.show();
-        }catch(Throwable unavailable){RedPacketSettings.toast(act,"关键词设置暂时无法读取");}
+        }catch(Throwable unavailable){toast(act,"关键词设置暂时无法读取");}
     }
 }

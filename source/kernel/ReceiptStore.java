@@ -11,17 +11,17 @@ final class ReceiptStore {
     }
     static String path(ReceiptConfig.Feature feature,String account) {
         if(!ReceiptConfig.validId(account))throw new IllegalArgumentException("Invalid receipt account");
-        return Kernel.WXDIR+feature.key+".receipt.settings."+RedPacketRuntime.hash(account).substring(0,16);
+        return Kernel.WXDIR+feature.key+".receipt.settings."+ModuleState.hash(account).substring(0,16);
     }
     static ReceiptConfig current(ReceiptConfig.Feature feature) { return load(feature,account()); }
     static synchronized ReceiptConfig load(ReceiptConfig.Feature feature,String account) {
-        String path=path(feature,account),text=RedPacketRuntime.read(path);
+        String path=path(feature,account),text=ModuleState.read(path);
         if(text!=null)return ReceiptConfig.decode(text); // Corruption fails closed; never silently resets to allow-all.
         ReceiptConfig config=new ReceiptConfig();
         if(feature==ReceiptConfig.Feature.RED_PACKET) {
-            String owner=RedPacketRuntime.read(LEGACY_OWNER),hash=RedPacketRuntime.hash(account);
+            String owner=ModuleState.read(LEGACY_OWNER),hash=ModuleState.hash(account);
             if(owner==null) {
-                if(!RedPacketRuntime.write(LEGACY_OWNER,hash+"\n"))throw new IllegalStateException("旧设置迁移标记保存失败");owner=hash;
+                if(!ModuleState.write(LEGACY_OWNER,hash+"\n"))throw new IllegalStateException("旧设置迁移标记保存失败");owner=hash;
             }
             if(hash.equals(owner.trim()))migrate(config);
         }
@@ -29,7 +29,7 @@ final class ReceiptStore {
         return config;
     }
     static void migrate(ReceiptConfig config) {
-        config.enabled=RedPacketRuntime.flag(Kernel.RP_ON_PATH);
+        config.enabled=ModuleState.flag(Kernel.RP_ON_PATH);
         String whitelist=Kernel.readText(Kernel.RP_WL_PATH);
         if(whitelist!=null && !whitelist.trim().isEmpty()) {
             config.group.rule=ReceiptConfig.Rule.WHITE;
@@ -49,7 +49,7 @@ final class ReceiptStore {
         } catch(RuntimeException malformed) { }
     }
     static synchronized boolean save(ReceiptConfig.Feature feature,String account,ReceiptConfig config) {
-        return RedPacketRuntime.write(path(feature,account),config.encode());
+        return ModuleState.write(path(feature,account),config.encode());
     }
     static boolean enabled(ReceiptConfig.Feature feature) {
         try { return current(feature).enabled; }catch(Throwable unavailable) { return false; }

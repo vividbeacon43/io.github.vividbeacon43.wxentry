@@ -28,7 +28,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "283";
+    static final String BUILD = "289";
     public static final String EDITION = "free";
     static final boolean RP_PREMIUM_EDITION = false;
     static final boolean TABLET_PREMIUM_EDITION = false;
@@ -828,8 +828,6 @@ static boolean wxVersionOk(Object actObj) {
     }
 
     static void hookRedPacket(ClassLoader cl) {
-        RedPacketRuntime.start(cl);
-        TransferRuntime.start(cl);
         try {
             String[] impls = {"t93.l", "ai5.b0", "ai5.d0"};
             int n = 0;
@@ -892,28 +890,25 @@ static boolean wxVersionOk(Object actObj) {
                                         }
                                     } catch (Throwable tt) { T("newroom err " + tt); }
                                     // Native callbacks own success notification/replies; text is not proof of receipt.
-                                    if (!RedPacketRuntime.ready() && t != null && (t.intValue() & 0xFFFF) == 10000) {
+                                    if (t != null && (t.intValue() & 0xFFFF) == 10000) {
                                         String sc = cv.getAsString("content");
                                         if (sc != null && sc.contains("你领取了") && sc.contains("红包")
                                                 && !new java.io.File(RP_TOAST_OFF_PATH).exists())
-                                            toastMain(redPacketPremiumEnabled() ? sc.replaceAll("<[^>]+>", "") : "抢到红包！");
+                                            toastMain("抢到红包！");
                                     }
                                     if (new java.io.File(WXDIR + "rp_debug").exists())
                                         T("rpdbg insert table=" + table + " type=" + t
                                           + " isSend=" + cv.getAsLong("isSend")
                                           + " msgId=" + cv.getAsLong("msgId")
                                           + " content=" + brief(cv.getAsString("content")));
-                                    Long incoming = cv.getAsLong("isSend");
-                                    if (t != null && (t.intValue() & 0xFFFF) == 49 && incoming != null && incoming.longValue() == 0)
-                                        TransferRuntime.received(cv.getAsString("content"),cv.getAsString("talker"),cv.getAsLong("createTime"));
                                     if (t == null) return;
-                                    String url = RedPacketEngine.messageUrl(t.intValue(), cv.getAsLong("isSend"), cv.getAsString("content"));
+                                    String url = RedPacketMessage.messageUrl(t.intValue(), cv.getAsLong("isSend"), cv.getAsString("content"));
                                     if (url == null) return;
                                     Long mid = cv.getAsLong("msgId");
                                     String talker = cv.getAsString("talker");
                                     boolean isGroup = talker != null && talker.endsWith("@chatroom");
                                     T("rp: detect type=" + t + " group=" + isGroup);
-                                    RedPacketRuntime.received(url, mid == null ? 0L : mid.longValue(), talker, cv.getAsLong("createTime"), cv.getAsString("content"));
+                                    ForegroundRedPacket.received(url, mid == null ? 0L : mid.longValue(), talker, cv.getAsLong("createTime"), cv.getAsString("content"));
                                 } catch (Throwable t) { T("rp err " + t); }
                             }
                         });
@@ -929,7 +924,7 @@ static boolean wxVersionOk(Object actObj) {
                     Class<?> ui = XposedHelpers.findClass("com.tencent.mm.plugin.luckymoney.ui."+uiName, cl);
                     XposedHelpers.findAndHookMethod(ui, "onCreate", Bundle.class, new XC_MethodHook() {
                         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                            RedPacketRuntime.legacyUi((Activity) param.thisObject);
+                            ForegroundRedPacket.onReceivePage((Activity) param.thisObject);
                         }
                     });
                     uiHooks++;T("rp ui hook ok "+uiName);
@@ -2014,7 +2009,7 @@ static boolean wxVersionOk(Object actObj) {
 
     static void openReceiveUI(final String url, final long msgId, final String talker, final String content) {
         try {
-            if (MODULE_OFF || RedPacketRuntime.silentSelected()
+            if (MODULE_OFF
                     || !ReceiptStore.permitsMessage(ReceiptConfig.Feature.RED_PACKET, receiptAccount(), talker, content)) return;
             final Activity current = currentActivityNow();
             final android.content.Context app = rememberAppContext(current, "receive");
@@ -6040,7 +6035,7 @@ static boolean wxVersionOk(Object actObj) {
 
     // Each visible row owns its action; positions never determine behavior.
     enum MenuAction {
-        MARK_READ, CLEAR_CHATS, UNFOLLOW_BIZ, RP_GROUPS, RP_TOGGLE, RP_RECEIVE_MODE, RP_SETTINGS, RP_TEMPLATES, RP_HISTORY, RP_DELAY, RP_KEYWORDS, TRANSFER_KEYWORDS, TRANSFER_TOGGLE, TRANSFER_LISTS, TRANSFER_DELAY, ANTI_TOGGLE,
+        MARK_READ, CLEAR_CHATS, UNFOLLOW_BIZ, RP_GROUPS, RP_TOGGLE, RP_RECEIVE_MODE, RP_DELAY, ANTI_TOGGLE,
         REALNAME_TOGGLE, ORIGINAL_TOGGLE, NEWROOM_TOGGLE, CHECK_UPDATE, WISH,
         SNS_TOGGLE, RESTART, DIAGNOSTICS, ACTIVATION, DONATE, ANNOUNCEMENTS, SCAN_CAMERA, TABLET_MODE, TABLET_QR, ORIGINAL_DOWNLOAD, ORIGINAL_LISTS, SNS_FORWARD, SNS_AD_BLOCK, SNS_LOCAL_LIKES, SNS_LOCAL_COMMENTS, SNS_LOCAL_PRESETS, SNS_LOCAL_CLEAR, GAME_EMOJI, AUTO_VOICE_TEXT
     }
@@ -6070,13 +6065,14 @@ static boolean wxVersionOk(Object actObj) {
     static java.util.ArrayList<MenuEntry> menuPageEntries(MenuCategory category) {
         java.util.ArrayList<MenuEntry> rows = new java.util.ArrayList<MenuEntry>();
         if (category == null) {
+            addMenuAction(rows, MenuAction.DONATE, "打赏");
+            addMenuAction(rows, MenuAction.ANNOUNCEMENTS, "更新公告");
             for (MenuCategory page : MenuCategory.values()) {
                 if (page == MenuCategory.EXPERIMENTAL && !SCAN_CAMERA_READY && !tabletFeatureAvailable()) continue;
                 if(page==MenuCategory.MOMENTS&&!momentsPremiumEnabled())continue;
                 rows.add(new MenuEntry(null, page, menuCategoryTitle(page)));
             }
-            addMenuAction(rows, MenuAction.DONATE, "打赏");
-            addMenuAction(rows, MenuAction.ANNOUNCEMENTS, "更新公告");
+            addMenuAction(rows, MenuAction.RESTART, "重启微信");
             return rows;
         }
         switch (category) {
@@ -6097,16 +6093,6 @@ static boolean wxVersionOk(Object actObj) {
                 addMenuAction(rows, MenuAction.RP_RECEIVE_MODE, "");
                 addMenuAction(rows, MenuAction.RP_GROUPS, "红包黑白名单（个人 / 群聊）");
                 addMenuAction(rows, MenuAction.RP_DELAY, "");
-                if(receiptKeywordsEnabled())addMenuAction(rows,MenuAction.RP_KEYWORDS,"");
-                if (redPacketPremiumEnabled()) {
-                    addMenuAction(rows, MenuAction.RP_SETTINGS, "领取提示与自动回复（高级版）");
-                    addMenuAction(rows, MenuAction.RP_TEMPLATES, "编辑自动回复感言");
-                    addMenuAction(rows, MenuAction.RP_HISTORY, "查看领取与收款记录");
-                    addMenuAction(rows, MenuAction.TRANSFER_TOGGLE, "");
-                    addMenuAction(rows, MenuAction.TRANSFER_LISTS, "转账黑白名单（个人 / 群聊）");
-                    addMenuAction(rows, MenuAction.TRANSFER_DELAY, "");
-                    if(receiptKeywordsEnabled())addMenuAction(rows,MenuAction.TRANSFER_KEYWORDS,"");
-                }
                 break;
             case MOMENTS:
                 if(momentsPremiumEnabled()){addMenuAction(rows,MenuAction.SNS_FORWARD,"");addMenuAction(rows,MenuAction.SNS_AD_BLOCK,"");addMenuAction(rows,MenuAction.SNS_LOCAL_LIKES,"");addMenuAction(rows,MenuAction.SNS_LOCAL_COMMENTS,"");addMenuAction(rows,MenuAction.SNS_LOCAL_PRESETS,"伪评论内容预设");addMenuAction(rows,MenuAction.SNS_LOCAL_CLEAR,"清空本地互动记录");}
@@ -6126,25 +6112,20 @@ static boolean wxVersionOk(Object actObj) {
                 addMenuAction(rows, MenuAction.CHECK_UPDATE, updateMenuLabel());
                 addMenuAction(rows, MenuAction.WISH, "功能建议");
                 addMenuAction(rows, MenuAction.DIAGNOSTICS, "真名自检（上报日志）");
-                addMenuAction(rows, MenuAction.RESTART, "重启微信");
                 break;
         }
         return rows;
     }
     static int menuPageHeight(Activity act, int rows, MenuCategory category) {
         android.util.DisplayMetrics metrics = act.getResources().getDisplayMetrics();
-        int estimate = SettingsUi.dp(act, Math.max(1, rows) * (category == null ? SettingsUi.ROW_HEIGHT + 6 : 80));
+        int estimate = SettingsUi.dp(act, Math.max(1, rows) * (category == null ? FeatureMenuUi.ROW_HEIGHT + FeatureMenuUi.ROW_GAP : 64));
         return Math.min(estimate, (int) (metrics.heightPixels * 0.48f));
     }
     static void refreshMenuLabel(MenuEntry item) {
         switch (item.action) {
-            case RP_TOGGLE: item.label = (freeRedPacketForegroundOnly()?"前台自动拉起并拆包":"自动领取红包"); break;
-            case RP_RECEIVE_MODE: item.label = "领取方式：" + (freeRedPacketForegroundOnly()?"前台自动拉起并拆包":RedPacketRuntime.silentSelected() ? "后台静默领取" : "前台自动点领取"); break;
+            case RP_TOGGLE: item.label = "前台自动拉起并拆包"; break;
+            case RP_RECEIVE_MODE: item.label = "领取方式：前台自动拉起并拆包"; break;
             case RP_DELAY: item.label="红包随机延时"; break;
-            case RP_KEYWORDS:item.label=ReceiptSettings.keywordLabel(ReceiptConfig.Feature.RED_PACKET);break;
-            case TRANSFER_KEYWORDS:item.label=ReceiptSettings.keywordLabel(ReceiptConfig.Feature.TRANSFER);break;
-            case TRANSFER_TOGGLE: item.label="自动接收转账（高级版）"; break;
-            case TRANSFER_DELAY: item.label="转账随机延时"; break;
             case ANTI_TOGGLE: item.label = "防撤回" + (imageRecallEnabled() ? "（高级版）" : "")
                     ; break;
             case REALNAME_TOGGLE: item.label = "真名"; break;
@@ -6167,17 +6148,9 @@ static boolean wxVersionOk(Object actObj) {
             case CLEAR_CHATS: showChatCleaner(act); break;
             case UNFOLLOW_BIZ: showBizPicker(act); break;
             case RP_GROUPS: ReceiptSettings.lists(act,ReceiptConfig.Feature.RED_PACKET); break;
-            case RP_KEYWORDS:ReceiptSettings.keywords(act,ReceiptConfig.Feature.RED_PACKET,refresh);break;
-            case TRANSFER_KEYWORDS:ReceiptSettings.keywords(act,ReceiptConfig.Feature.TRANSFER,refresh);break;
             case RP_TOGGLE: ReceiptSettings.toggle(act,ReceiptConfig.Feature.RED_PACKET,refresh); break;
             case RP_DELAY: ReceiptSettings.delay(act,ReceiptConfig.Feature.RED_PACKET,refresh); break;
-            case TRANSFER_TOGGLE: ReceiptSettings.toggle(act,ReceiptConfig.Feature.TRANSFER,refresh); break;
-            case TRANSFER_LISTS: ReceiptSettings.lists(act,ReceiptConfig.Feature.TRANSFER); break;
-            case TRANSFER_DELAY: ReceiptSettings.delay(act,ReceiptConfig.Feature.TRANSFER,refresh); break;
-            case RP_RECEIVE_MODE: RedPacketSettings.mode(act, refresh); break;
-            case RP_SETTINGS: RedPacketSettings.show(act); break;
-            case RP_TEMPLATES: RedPacketSettings.templates(act); break;
-            case RP_HISTORY: RedPacketSettings.history(act); break;
+            case RP_RECEIVE_MODE: ForegroundRedPacket.showMode(act); break;
             case ANTI_TOGGLE: toggleFlag(AR_OFF_PATH, "防撤回", true); RecallMarkLayout.refresh(); MediaRecallRuntime.settingsChanged(); break;
             case REALNAME_TOGGLE:
                 toggleFlag(RN_OFF_PATH, "群成员真名", true);
@@ -6236,9 +6209,7 @@ static boolean wxVersionOk(Object actObj) {
         if(row.action==null)return null;
         switch(row.action) {
             case RP_TOGGLE:return ReceiptSettings.enabled(ReceiptConfig.Feature.RED_PACKET);
-            case TRANSFER_TOGGLE:return ReceiptSettings.enabled(ReceiptConfig.Feature.TRANSFER);
             case RP_DELAY:return ReceiptSettings.delayEnabled(ReceiptConfig.Feature.RED_PACKET);
-            case TRANSFER_DELAY:return ReceiptSettings.delayEnabled(ReceiptConfig.Feature.TRANSFER);
             case ANTI_TOGGLE:return !f(AR_OFF_PATH);
             case REALNAME_TOGGLE:return !f(RN_OFF_PATH);
             case ORIGINAL_TOGGLE:return !f(ORIG_OFF_PATH);
@@ -6276,7 +6247,6 @@ static boolean wxVersionOk(Object actObj) {
         if(row.action==MenuAction.SNS_LOCAL_LIKES)return SnsLocalSettings.toggle(act,SnsLocalData.Feature.LIKES,on);
         if(row.action==MenuAction.SNS_LOCAL_COMMENTS)return SnsLocalSettings.toggle(act,SnsLocalData.Feature.COMMENTS,on);
         if(row.action==MenuAction.RP_DELAY)return ReceiptSettings.setDelayEnabled(act,ReceiptConfig.Feature.RED_PACKET,on,null);
-        if(row.action==MenuAction.TRANSFER_DELAY)return ReceiptSettings.setDelayEnabled(act,ReceiptConfig.Feature.TRANSFER,on,null);
         if(menuToggleValue(row)!=null && menuToggleValue(row).booleanValue()!=on)performMenuAction(act,row,null);
         return Boolean.TRUE.equals(menuToggleValue(row));
     }
@@ -6289,8 +6259,8 @@ static boolean wxVersionOk(Object actObj) {
             final java.util.ArrayList<MenuEntry> items = menuPageEntries(null);
 
             final android.widget.LinearLayout head = FeatureMenuUi.column(act);
-            FeatureMenuUi.pad(head, 16, 12);
-            final android.widget.TextView tTitle = FeatureMenuUi.text(act, "模块设置", 23, FeatureMenuUi.Tone.INK);
+            FeatureMenuUi.pad(head, 16, 9);
+            final android.widget.TextView tTitle = FeatureMenuUi.text(act, "模块设置", 21, FeatureMenuUi.Tone.INK);
             tTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             head.addView(tTitle);
             final android.widget.TextView tVer = FeatureMenuUi.text(act,
@@ -6306,7 +6276,7 @@ static boolean wxVersionOk(Object actObj) {
             FeatureMenuUi.card(update, true, true);
             FeatureMenuUi.pad(update, 12, 4);
             android.widget.LinearLayout.LayoutParams updateParams = new android.widget.LinearLayout.LayoutParams(-1, -2);
-            updateParams.topMargin = SettingsUi.dp(act, 8);
+            updateParams.topMargin = SettingsUi.dp(act, 6);
             head.addView(update, updateParams);
             if (SERVER_REPLY != null && !SERVER_REPLY.isEmpty()) {
                 android.widget.TextView reply = FeatureMenuUi.text(act, "官方回复：" + SERVER_REPLY, 12, FeatureMenuUi.Tone.MUTED);
@@ -6325,11 +6295,11 @@ static boolean wxVersionOk(Object actObj) {
                             final MenuEntry entry=getItem(position);refreshMenuLabelSafe(entry);
                             Boolean checked=menuToggleValue(entry);
                             if(checked!=null) {
-                                String detail=entry.action==MenuAction.SCAN_CAMERA?"不支持长按识别":entry.action==MenuAction.AUTO_VOICE_TEXT?"进入会话时补转已加载的语音，收到新语音时逐条转写":entry.action==MenuAction.GAME_EMOJI?"长按骰子 / 猜拳设置默认结果及后续序列":entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TRANSFER_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.TRANSFER):entry.action==MenuAction.TABLET_MODE?"开启或关闭后需重启微信，登录页生效":entry.action==MenuAction.SNS_FORWARD?"长按目标进入发表页，需手动发表":entry.action==MenuAction.SNS_AD_BLOCK?"过滤微信广告，刷新朋友圈生效":entry.action==MenuAction.SNS_LOCAL_LIKES?"长按文案选择好友，仅本机展示":entry.action==MenuAction.SNS_LOCAL_COMMENTS?"长按文案添加评论，仅本机展示":entry.action==MenuAction.ORIGINAL_DOWNLOAD?"收到或打开图片时按名单下载可用原图，独立于防撤回":"";
+                                String detail=entry.action==MenuAction.SCAN_CAMERA?"不支持长按识别":entry.action==MenuAction.AUTO_VOICE_TEXT?"进入会话时补转已加载的语音，收到新语音时逐条转写":entry.action==MenuAction.GAME_EMOJI?"长按骰子 / 猜拳设置默认结果及后续序列":entry.action==MenuAction.RP_DELAY?ReceiptSettings.delayRangeLabel(ReceiptConfig.Feature.RED_PACKET):entry.action==MenuAction.TABLET_MODE?"开启或关闭后需重启微信，登录页生效":entry.action==MenuAction.SNS_FORWARD?"长按目标进入发表页，需手动发表":entry.action==MenuAction.SNS_AD_BLOCK?"过滤微信广告，刷新朋友圈生效":entry.action==MenuAction.SNS_LOCAL_LIKES?"长按文案选择好友，仅本机展示":entry.action==MenuAction.SNS_LOCAL_COMMENTS?"长按文案添加评论，仅本机展示":entry.action==MenuAction.ORIGINAL_DOWNLOAD?"收到或打开图片时按名单下载可用原图，独立于防撤回":"";
                                 SettingsUi.ToggleRow row=FeatureMenuUi.toggle(act,entry.label,detail,checked.booleanValue(),new SettingsUi.Change() {
                                     public boolean set(boolean on) { return setMenuToggle(act,entry,on); }
                                 });
-                                if(entry.action==MenuAction.RP_DELAY||entry.action==MenuAction.TRANSFER_DELAY)row.setOnClickListener(new android.view.View.OnClickListener() {
+                                if(entry.action==MenuAction.RP_DELAY)row.setOnClickListener(new android.view.View.OnClickListener() {
                                     public void onClick(android.view.View v) { performMenuAction(act,entry,renderMenu[0]); }
                                 });
                                 return row;
@@ -7030,10 +7000,9 @@ static boolean wxVersionOk(Object actObj) {
         try { return String.valueOf(XposedHelpers.callStaticMethod(XposedHelpers.findClass("w41.z1",APP_CL),"u")); }
         catch(Throwable unavailable) { return ""; }
     }
-    static boolean receiptKeywordsEnabled() { return "vip".equals(EDITION) && redPacketPremiumEnabled(); }
-    static boolean redPacketPremiumEnabled() {
-        return RP_PREMIUM_EDITION && RedPacketPolicy.premium(EDITION, callMainStr("currentKernelEdition"), MODULE_OFF);
-    }
+    static boolean transferSettingsAllowed(Activity act) { return false; }
+    static boolean transferSettingsReady(Activity act) { return false; }
+    static boolean receiptKeywordsEnabled() { return false; }
     static boolean momentsPremiumEnabled() {return !MODULE_OFF && ("plus".equals(EDITION)||"vip".equals(EDITION)) && "1".equals(callMainStr2("imageFeatureEnabledFor", EDITION));}
     static boolean snsForwardEnabled() {return momentsPremiumEnabled()&&MomentsSettings.configured(MomentsConfig.Feature.FORWARD);}
     static boolean snsAdBlockEnabled() {return momentsPremiumEnabled()&&MomentsSettings.configured(MomentsConfig.Feature.AD_BLOCK);}

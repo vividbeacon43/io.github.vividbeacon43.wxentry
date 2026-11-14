@@ -7,6 +7,7 @@ import struct
 import subprocess
 import tempfile
 import zipfile
+from verify_public_release import check_apk
 
 
 def patch_manifest(raw, base_code, base_name, new_code, new_name):
@@ -131,6 +132,7 @@ def main():
         with zipfile.ZipFile(aligned) as apk:
             if apk.testzip() or any(apk.read(name) != data for name, data in payload.items()):
                 raise RuntimeError('APK payload validation failed')
+        check_apk(aligned)
         aligned.rename(output)
     print(output)
 

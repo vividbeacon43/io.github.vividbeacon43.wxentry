@@ -69,8 +69,8 @@ public class Main implements IXposedHookLoadPackage {
     static final String URL_MANIFEST = BASE + "kernel/manifest";
     static final String URL_KERNEL   = BASE + "kernel/download";
     // === 1.43：模块 APK 自身更新 + 内核自动更新/回滚 ===
-    static final int MY_VC = 120;                       // 由 release.py 打包时改写
-    static final String MY_VN = "2.20";
+    static final int MY_VC = 126;                       // 由 release.py 打包时改写
+    static final String MY_VN = "2.26";
     static final String URL_APK_MANIFEST = BASE + "apk.json";
     static final String URL_APK = BASE + "wxentry.apk";
     static final String APK_PENDING = DIR + "apk.pending";
@@ -88,14 +88,18 @@ public class Main implements IXposedHookLoadPackage {
     static volatile Class<?> RUNNING_KERNEL_CLASS;
     static final KernelDelivery DELIVERY = new KernelDelivery(new File(DIR), new KernelDelivery.Transport() {
         public KernelDelivery.Manifest manifest(String token) throws Exception {
-            String response = new String(channelPost(URL_MANIFEST, "{\"token\":\"" + jesc(token) + "\",\"apk_v\":" + MY_VC + "}"), "UTF-8");
+            org.json.JSONObject request = new org.json.JSONObject().put("token", token).put("apk_v", MY_VC);
+            String response = new String(channelPost(URL_MANIFEST, request.toString()), "UTF-8");
             if (!"true".equals(jsonStr(response, "ok"))) throw new Exception("Invalid channel response");
             return new KernelDelivery.Manifest(jsonStr(response, "edition"), jsonStr(response, "v"),
-                    jsonStr(response, "sha256"), jsonStr(response, "sig"), jsonStr(response, "grant_sig"));
+                    jsonStr(response, "sha256"), jsonStr(response, "sig"), jsonStr(response, "grant_sig"),
+                    jsonStr(response, "download_ticket"));
         }
         public byte[] download(String token, KernelDelivery.Manifest m) throws Exception {
-            return channelPost(URL_KERNEL, "{\"token\":\"" + jesc(token) + "\",\"v\":\""
-                    + m.version + "\",\"sha256\":\"" + m.sha + "\",\"apk_v\":" + MY_VC + "}");
+            org.json.JSONObject request = new org.json.JSONObject().put("token", token).put("apk_v", MY_VC)
+                    .put("v", m.version).put("sha256", m.sha);
+            if (m.downloadTicket != null && !m.downloadTicket.isEmpty()) request.put("download_ticket", m.downloadTicket);
+            return channelPost(URL_KERNEL, request.toString());
         }
         public byte[] decrypt(byte[] encrypted) throws Exception { return Main.decrypt(encrypted); }
         public boolean verify(String data, String signature) { return verifySig(data, signature); }
@@ -132,8 +136,9 @@ public class Main implements IXposedHookLoadPackage {
                 KernelDelivery.Result result = DELIVERY.refresh(licField("token"));
                 String apkVersion = Integer.toString(MY_VC);
                 if (!apkVersion.equals(readText(KERNEL_APK_VERSION))) writeText(KERNEL_APK_VERSION, apkVersion);
+                startPaidTablet();
                 return result;
-            } finally { TabletModeHooks.refreshAuthorization(); }
+            } finally { tabletCall("refreshAuthorization", new Class<?>[0]); }
         }
     }
     static void refreshEditionLater() {
@@ -190,16 +195,56 @@ public class Main implements IXposedHookLoadPackage {
     static volatile java.lang.ref.WeakReference<Activity> RECOVERY_ACTIVITY;
     static int RECOVERY_GENERATION;
 
-    static boolean tabletFeatureAllowed() {
+    private static final String TABLET_ENTRY = "com.zafiro.wxentry.PaidTabletEntry";
+    private static volatile Class<?> tabletEntry;
+
+    public static boolean tabletFeatureAllowed() {
         String token=licField("token"),wxid=licField("wxid");
         boolean valid=token!=null&&wxid!=null&&verifyToken(token,wxid);
         return TabletEntitlement.allowed(DELIVERY,token,valid);
     }
-    public static String tabletFeatureEnabled() {return tabletFeatureAllowed()?"1":"0";}
-    public static String tabletModeConfigured() {return TabletModeHooks.configured()?"1":"0";}
-    public static String tabletModeActive() {return TabletModeHooks.active?"1":"0";}
-    public static boolean setTabletMode(Activity act,boolean enabled) {return TabletLoginEntry.set(act,enabled);}
-    public static void openTabletQr(Activity act) {TabletLoginEntry.openQr(act);}
+
+    private static synchronized void startPaidTablet() {
+        String token = licField("token");
+        if (token == null || !tabletFeatureAllowed()) return;
+        try {
+            KernelDelivery.Bundle bundle = DELIVERY.cached(token);
+            if (bundle == null || !TabletEntitlement.premium(bundle.manifest.edition)) return;
+            if (tabletEntry != null) return;
+            ClassLoader loader = new dalvik.system.InMemoryDexClassLoader(
+                    java.nio.ByteBuffer.wrap(runtimeDex(bundle.dex)), Main.class.getClassLoader());
+            Class<?> entry = Class.forName(TABLET_ENTRY, true, loader);
+            entry.getMethod("start", ClassLoader.class, File.class).invoke(null, WX_CL, new File(DIR));
+            tabletEntry = entry;
+        } catch (Throwable unavailable) {
+            log("paid tablet entry unavailable " + unavailable.getClass().getSimpleName());
+        }
+    }
+
+    private static synchronized Object tabletCall(String method, Class<?>[] parameterTypes, Object... args) {
+        if (tabletEntry == null) return null;
+        try {
+            return tabletEntry.getMethod(method, parameterTypes).invoke(null, args);
+        } catch (Throwable unavailable) {
+            log("paid tablet " + method + " unavailable " + unavailable.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    public static String tabletFeatureEnabled() { return tabletFeatureAllowed() && tabletEntry != null ? "1" : "0"; }
+    public static String tabletModeConfigured() {
+        return Boolean.TRUE.equals(tabletCall("configured", new Class<?>[0])) ? "1" : "0";
+    }
+    public static String tabletModeActive() {
+        return Boolean.TRUE.equals(tabletCall("active", new Class<?>[0])) ? "1" : "0";
+    }
+    public static boolean setTabletMode(Activity act, boolean enabled) {
+        return Boolean.TRUE.equals(tabletCall("set", new Class<?>[]{Activity.class, boolean.class}, act, enabled));
+    }
+    public static void openTabletQr(Activity act) {
+        tabletCall("openQr", new Class<?>[]{Activity.class}, act);
+    }
+
     static String xposedBridgeName() { return XposedBridge.class.getName(); }
     static byte[] runtimeDex(byte[] verified) {
         if (verified == null) return null;
@@ -243,7 +288,7 @@ public class Main implements IXposedHookLoadPackage {
             XposedBridge.hookAllMethods(Activity.class, "onResume", new XC_MethodHook() {
                 protected void afterHookedMethod(MethodHookParam p) {
                     Activity act = (Activity)p.thisObject;
-                    TabletLoginEntry.resumed(act);
+                    tabletCall("resumed", new Class<?>[]{Activity.class}, act);
                     if (act.getClass().getName().endsWith(".LauncherUI")) onWeChatReady(act);
                 }
             });
@@ -274,7 +319,7 @@ public class Main implements IXposedHookLoadPackage {
         PROC = "";
         try { PROC = String.valueOf(XposedHelpers.getObjectField(lp, "processName")); } catch (Throwable t) {}
         if (PROC.length() > 0 && !"com.tencent.mm".equals(PROC)) return;
-        try {TabletModeHooks.start(WX_CL,new java.io.File(DIR));}catch(Throwable failure){log("tablet startup unavailable "+failure.getClass().getSimpleName());}
+        startPaidTablet();
         installRecoveryLifecycle();
         log("handleLoadPackage pkg=" + lp.packageName + " proc=" + PROC);
         try {
@@ -503,6 +548,8 @@ public class Main implements IXposedHookLoadPackage {
             new Thread(new Runnable() {
                 public void run() {
                     try {
+                        // Resolve a pending device registration before asking for a protected kernel.
+                        if (checkBootAuthorization(act)) return;
                         final byte[] dex = loadKernelBytes();
                         if (dex != null && dex.length > 1000) {
                             // 1.64：boot 不再回 UI 线程跑 —— 首次 DEX 索引要 1~2.4 秒，
@@ -769,78 +816,52 @@ public class Main implements IXposedHookLoadPackage {
         return null;
     }
 
-    /** 从模块 APK 的 v1 签名块里取证书算 sha256 —— 不经过 PackageManager，不受包可见性影响。 */
-    static String apkCertSha(String apk) {
-        java.util.zip.ZipFile zf = null;
-        try {
-            zf = new java.util.zip.ZipFile(apk);
-            String hit = null;
-            for (java.util.Enumeration<? extends java.util.zip.ZipEntry> e = zf.entries(); e.hasMoreElements(); ) {
-                String n = e.nextElement().getName();
-                String up = n.toUpperCase();
-                if (up.startsWith("META-INF/") && (up.endsWith(".RSA") || up.endsWith(".DSA") || up.endsWith(".EC"))) { hit = n; break; }
-            }
-            if (hit == null) return null;
-            java.io.InputStream in = zf.getInputStream(zf.getEntry(hit));
-            java.security.cert.Certificate cert = java.security.cert.CertificateFactory
-                    .getInstance("X.509").generateCertificate(in);
-            byte[] d = cert.getEncoded();
-            in.close();
-            return sha256Hex(d);
-        } catch (Throwable t) {
-            log("sig: apk read err " + t);
-            return null;
-        } finally {
-            try { if (zf != null) zf.close(); } catch (Throwable t) {}
-        }
-    }
+    private static final String MODULE_PACKAGE = "io.github.vividbeacon43.wxentry";
 
-    /** 严格模式：WechatXposed/sig.strict 存在时，「查不到签名」按不通过处理。 */
-    static boolean sigStrict() {
-        try { return new File(DIR + "sig.strict").exists(); } catch (Throwable t) { return false; }
-    }
-
-    static boolean signedByMe(Context c) {
-        // 1) 首选：直接读模块 APK 里的证书（包可见性、内存 dex 都不影响）
+    static boolean signedByMe(Context context) {
+        // PackageManager verifies the APK signing scheme during installation.
         try {
-            String apk = moduleApk();
-            if (apk != null) {
-                String hex = apkCertSha(apk);
-                if (hex != null) {
-                    boolean ok = EXPECTED_SIG.equalsIgnoreCase(hex);
-                    log("sig=" + hex + (ok ? " (ok)" : " (MISMATCH)"));
-                    return ok;   // APK 里读到了就是权威结果，不用再问 PackageManager
-                } else {
-                    log("sig: apk has no v1 block, fallback");
-                }
+            android.content.pm.PackageInfo info;
+            android.content.pm.Signature[] signers;
+            if (android.os.Build.VERSION.SDK_INT >= 28) {
+                info = context.getPackageManager().getPackageInfo(MODULE_PACKAGE,
+                        android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES);
+                signers = info.signingInfo == null ? null : info.signingInfo.getApkContentsSigners();
             } else {
-                log("sig: module apk path unknown, fallback");
+                info = context.getPackageManager().getPackageInfo(MODULE_PACKAGE,
+                        android.content.pm.PackageManager.GET_SIGNATURES);
+                signers = info.signatures;
             }
-        } catch (Throwable t) { log("sig: apk path err " + t); }
-        // 2) 兜底：PackageManager（能用就用，查不到就放行）
-        try {
-            Object pm = XposedHelpers.callMethod(c, "getPackageManager");
-            Object pi = null;
-            String[] names = new String[]{"io.github.vividbeacon43.wxentry", "com.zafiro.wxentry"};
-            for (int i = 0; i < names.length && pi == null; i++) {
-                try { pi = XposedHelpers.callMethod(pm, "getPackageInfo", names[i], Integer.valueOf(64)); }
-                catch (Throwable t) {}
+            if (signers != null && signers.length > 0) {
+                boolean official = signers.length == 1 && EXPECTED_SIG.equals(sha256Hex(signers[0].toByteArray()));
+                log("module signature via PackageManager " + (official ? "verified" : "mismatch"));
+                return official;
             }
-            if (pi == null) {
-                log("sig: package not visible, UNVERIFIED" + (sigStrict() ? " (strict: blocked)" : " (fail-open)"));
-                return !sigStrict();
+        } catch (android.content.pm.PackageManager.NameNotFoundException | SecurityException hidden) {
+            // The module package can be hidden from the WeChat process.
+        }
+
+        String apk = moduleApk();
+        if (apk == null) return false;
+        try (java.util.jar.JarFile archive = new java.util.jar.JarFile(apk, true)) {
+            for (String name : new String[]{"AndroidManifest.xml", "classes.dex", "classes2.dex"}) {
+                java.util.jar.JarEntry entry = archive.getJarEntry(name);
+                if (entry == null) return false;
+                // Reading to EOF makes JarFile verify the entry's digest and signature.
+                try (InputStream stream = archive.getInputStream(entry)) {
+                    byte[] buffer = new byte[8192];
+                    while (stream.read(buffer) != -1) { }
+                }
+                java.security.CodeSigner[] signers = entry.getCodeSigners();
+                if (signers == null || signers.length != 1) return false;
+                byte[] cert = signers[0].getSignerCertPath().getCertificates().get(0).getEncoded();
+                if (!EXPECTED_SIG.equals(sha256Hex(cert))) return false;
             }
-            Object[] sigs = (Object[]) XposedHelpers.getObjectField(pi, "signatures");
-            if (sigs == null || sigs.length == 0) {
-                log("sig: none, UNVERIFIED" + (sigStrict() ? " (strict: blocked)" : " (fail-open)"));
-                return !sigStrict();          // S07：无法验证 → 由严格模式决定，不再无条件放行
-            }
-            String hex = sha256Hex((byte[]) XposedHelpers.callMethod(sigs[0], "toByteArray"));
-            log("sig(pm)=" + hex);
-            return EXPECTED_SIG.equalsIgnoreCase(hex);
-        } catch (Throwable t) {
-            log("sig check unavailable: " + t + (sigStrict() ? " (strict: blocked)" : " (fail-open)"));
-            return !sigStrict();   // 默认放行，但绝不谎称「已验证」；sig.strict 打开才拦
+            log("module signature via signed APK entries verified");
+            return true;
+        } catch (Exception invalid) {
+            log("module signature verification failed " + invalid.getClass().getSimpleName());
+            return false;
         }
     }
 
@@ -982,6 +1003,10 @@ public class Main implements IXposedHookLoadPackage {
                     }}); return;
                 }
                 writeFileAtomic(new File(LIC), ("wxid=" + wxid + "\ncode=" + code + "\ntoken=" + token + "\n").getBytes("UTF-8"));
+                if (checkBootAuthorization(act)) {
+                    if (status != null) act.runOnUiThread(() -> status.setText("授权暂不可用，请查看停用提示"));
+                    return;
+                }
                 if (!ensureKernel()) {
                     final ApkRelease pending = cachedApkRelease();
                     act.runOnUiThread(new Runnable() { public void run() {
@@ -1296,8 +1321,8 @@ public class Main implements IXposedHookLoadPackage {
             String lic = readText(LIC);
             String token = lic == null ? null : line(lic, "token=");
             if (token == null || token.length() < 20) return "ERR";
-            String body = "{\"token\":\"" + jesc(token) + "\"}";
-            String resp = http(BASE + "status", body);
+            org.json.JSONObject body = new org.json.JSONObject().put("token", token);
+            String resp = http(BASE + "status", body.toString());
             if (resp == null) return "ERR";
             String f = resp.replace(" ", "").replace("\n", "");
             if (!f.contains("\"ok\":true")) return "ERR";
@@ -1311,6 +1336,24 @@ public class Main implements IXposedHookLoadPackage {
             return "OK|" + (dis ? "1" : "0") + "|" + flat(reason) + "|" + flat(reply) + "|" + flat(feat)
                     + "|" + flat(tierName);
         } catch (Throwable t) { log("status err " + t); return "ERR"; }
+    }
+
+    static boolean checkBootAuthorization(final Activity act) {
+        String state = statusLine();
+        if (!state.startsWith("OK|1|")) return false;
+        String[] fields = state.split("\\|", 6);
+        final String reason = fields.length > 2 ? fields[2] : "模块暂不可用";
+        booted = false;
+        act.runOnUiThread(new Runnable() {
+            public void run() {
+                if (!act.isFinishing() && !act.isDestroyed()) {
+                    new android.app.AlertDialog.Builder(act)
+                            .setTitle("模块暂不可用").setMessage(reason)
+                            .setPositiveButton("关闭", null).show();
+                }
+            }
+        });
+        return true;
     }
 
     static String flat(String s) {
@@ -1607,7 +1650,8 @@ public class Main implements IXposedHookLoadPackage {
                 if (act.isFinishing() || act.isDestroyed()) return;
                 if (pending != null) showApkPrompt(act, pending, true);
                 else if (result.startsWith("已") && pendingVersion() != null) showEditionRestart(act, result);
-                else new AlertDialog.Builder(act).setTitle("检查更新").setMessage(result)
+                else new AlertDialog.Builder(act).setTitle("检查更新")
+                        .setMessage("当前安装模块 " + MY_VN + "\n" + result)
                         .setPositiveButton("关闭", null).show();
             }});
         }}, "wxentry-manual-update").start();
@@ -1618,7 +1662,7 @@ public class Main implements IXposedHookLoadPackage {
         ApkRelease pending = cachedApkRelease();
         if (pending == null) return "没有待更新的模块版本";
         String name = pending.name;
-        String url = URL_APK;
+        String url = URL_APK + "?v=" + MY_VC;   // 2.26: 每次版本不同 URI，避免 DownloadManager 复用旧记录
         try {
             Class<?> uriC = Class.forName("android.net.Uri");
             Object uri = uriC.getMethod("parse", String.class).invoke(null, url);
@@ -1670,7 +1714,7 @@ public class Main implements IXposedHookLoadPackage {
     public static String serverVersion() {
         try { return DELIVERY.probe(licField("token")).version; }
         catch (Throwable t) { return null; }
-        finally {TabletModeHooks.refreshAuthorization();}
+        finally {tabletCall("refreshAuthorization", new Class<?>[0]);}
     }
 
     /** 当前本地内核版本 */
@@ -2372,7 +2416,7 @@ public class Main implements IXposedHookLoadPackage {
         o.close();
     }
 
-    static void log(String msg) {
+    public static void log(String msg) {
         try { XposedBridge.log("WXL: " + msg); } catch (Throwable t) {}
         try {
             File f = new File(DIR + "loader.log");

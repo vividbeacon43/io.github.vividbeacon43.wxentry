@@ -13,7 +13,7 @@ public final class DexEditionCheck {
         String root="Lcom/zafiro/wxentry/kernel/";
         Set<String> receiptClasses=new HashSet<>();
         boolean premium=args[1].equals("plus")||args[1].equals("vip");
-        boolean callToolsMenu=false;
+        boolean callToolsMenu=false, readInferenceMenu=false;
         ClassDef scanCamera=null;
         String legacyScanner="Lcom/zafiro/wxentry/scancam/ScanCameraRuntime;";
         for(ClassDef c:dex.getClasses()) {
@@ -21,8 +21,10 @@ public final class DexEditionCheck {
             if(c.getType().equals(root+"ScanCameraRuntime;"))scanCamera=c;
             if(c.getType().equals(legacyScanner))
                 throw new AssertionError("The APK class loader can shadow the legacy scanner type");
-            if(c.getType().equals(root+"Kernel$MenuAction;"))for(Field field:c.getFields())
+            if(c.getType().equals(root+"Kernel$MenuAction;"))for(Field field:c.getFields()) {
                 if(field.getName().equals("CALL_TOOLS"))callToolsMenu=true;
+                if(field.getName().equals("READ_INFERENCE"))readInferenceMenu=true;
+            }
             if(c.getType().startsWith(root+"RedPacket"))red.add(c.getType());
             if(c.getType().equals(root+"RedPacketSettings;"))settings=c;
             if(c.getType().equals(root+"Kernel;"))kernel=c;
@@ -48,14 +50,29 @@ public final class DexEditionCheck {
         }
         if(kernel==null||!voice||!forward||!sender||!picker||!queue||!icon||!layout)throw new AssertionError("Base voice runtime missing");
         checkScannerLinkage(kernel, scanCamera, legacyScanner);
+        boolean vip = args[1].equals("vip");
+        for(String name:new String[]{"PaidTabletEntry","TabletModeHooks","TabletModeStore","TabletLoginEntry","ExperimentalUi","WechatRestartPlan"}) {
+            String type="Lcom/zafiro/wxentry/"+name;
+            boolean present=receiptClasses.stream().anyMatch(value->value.equals(type+";")||value.startsWith(type+"$"));
+            if(present!=premium)throw new AssertionError("Paid tablet implementation boundary failed: "+name);
+        }
+        if(receiptClasses.contains("Lcom/zafiro/wxentry/Main;"))throw new AssertionError("Kernel must not package the loader");
+
+        if (readInferenceMenu != vip || receiptClasses.contains(root+"ReadInferenceRuntime;") != vip)
+            throw new AssertionError("Inferred read markers must be VIP-only");
         if(receiptClasses.contains(root+"CallToolsRuntime;")!=premium || callToolsMenu!=premium)
             throw new AssertionError("Experimental in-call tools edition boundary failed");
         Map<String,String> values=new HashMap<>();
         for(Field f:kernel.getStaticFields())if(f.getInitialValue() instanceof StringEncodedValue)
             values.put(f.getName(),((StringEncodedValue)f.getInitialValue()).getValue());
         if(!args[1].equals(values.get("EDITION"))||!args[2].equals(values.get("BUILD")))throw new AssertionError("Version/edition mismatch");
-        for(String name:new String[]{"RedPacketUi","RedPacketUiNative","RedPacketPolicy","RedPacketEngine","RedPacketNative","RedPacketRuntime","RedPacketSettings"})
-            if(!red.contains(root+name+";"))throw new AssertionError("Red packet runtime missing: "+name);
+        for(String name:new String[]{"RedPacketUi","RedPacketUiNative","RedPacketMessage","ModuleState"})
+            if(!receiptClasses.contains(root+name+";"))throw new AssertionError("Red packet runtime missing: "+name);
+        for(String name:new String[]{"RedPacketPolicy","RedPacketEngine","RedPacketNative","RedPacketRuntime","RedPacketSettings","TransferEngine","TransferNative","TransferRuntime"}) {
+            boolean present=receiptClasses.stream().anyMatch(type->type.equals(root+name+";")||type.startsWith(root+name+"$"));
+            if(present!=premium)throw new AssertionError("Paid receipt implementation boundary failed: "+name);
+        }
+        if(receiptClasses.contains(root+"ForegroundRedPacket;")==premium)throw new AssertionError("Free receipt implementation boundary failed");
         boolean contextAtBoot=false, nativeUiDelegate=false, fullNativeEntry=false, callToolsAtBoot=false;
         for(Method m:kernel.getMethods())if(m.getImplementation()!=null)
             for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction) {
@@ -152,8 +169,8 @@ public final class DexEditionCheck {
                 if(ref instanceof MethodReference && ((MethodReference)ref).getDefiningClass().equals(root+"RedPacketRuntime;")
                         && ((MethodReference)ref).getName().equals("start"))redStart=true;
             }
-        if(!redStart)throw new AssertionError("Red packet runtime not started");
-        for(String name:new String[]{"ReceiptConfig","ReceiptStore","ReceiptTargets","ReceiptSettings","SettingsUi","RecallTipRuntime","RecallMarkStore","RecallMarkLayout","TransferEngine","TransferNative","TransferRuntime","NativeSceneBus","MediaMessagePolicy","RecallMediaCache","MediaNative","MediaRecallRuntime","OriginalImageRuntime"})
+        if(redStart!=premium)throw new AssertionError("Paid red packet startup boundary failed");
+        for(String name:new String[]{"ReceiptConfig","ReceiptStore","ReceiptTargets","ReceiptSettings","SettingsUi","RecallTipRuntime","RecallMarkStore","RecallMarkLayout","NativeSceneBus","MediaMessagePolicy","RecallMediaCache","MediaNative","MediaRecallRuntime","OriginalImageRuntime"})
             if(!receiptClasses.contains(root+name+";"))throw new AssertionError("Receipt runtime missing: "+name);
         boolean transferStart=false;
         for(Method m:kernel.getMethods())if(m.getName().equals("hookRedPacket") && m.getImplementation()!=null)
@@ -161,11 +178,11 @@ public final class DexEditionCheck {
                 Reference ref=((ReferenceInstruction)ins).getReference();
                 if(ref instanceof MethodReference && ((MethodReference)ref).getDefiningClass().equals(root+"TransferRuntime;") && ((MethodReference)ref).getName().equals("start"))transferStart=true;
             }
-        if(!transferStart)throw new AssertionError("Transfer runtime not started");
+        if(transferStart!=premium)throw new AssertionError("Paid transfer startup boundary failed");
         if(!methods.contains("receiptAccount") || !methods.contains("freeRedPacketForegroundOnly"))throw new AssertionError("Receipt account/free gate missing");
-        if(!methods.contains("redPacketPremiumEnabled"))throw new AssertionError("Red packet authorization gate missing");
+        if(methods.contains("redPacketPremiumEnabled")!=premium)throw new AssertionError("Red packet authorization gate missing");
         boolean singleChoice=false,multiChoice=false,frontLabel=false,silentLabel=false;
-        for(Method m:settings.getMethods())if(m.getName().equals("mode") && m.getImplementation()!=null)
+        if(premium)for(Method m:settings.getMethods())if(m.getName().equals("mode") && m.getImplementation()!=null)
             for(Instruction ins:m.getImplementation().getInstructions())if(ins instanceof ReferenceInstruction) {
                 Reference ref=((ReferenceInstruction)ins).getReference();
                 if(ref instanceof MethodReference) {
@@ -175,7 +192,7 @@ public final class DexEditionCheck {
                     String label=((StringReference)ref).getString();frontLabel|=label.equals("前台自动点领取");silentLabel|=label.equals("后台静默领取（高级版）");
                 }
             }
-        if(!singleChoice || multiChoice || !frontLabel || !silentLabel)throw new AssertionError("Receive mode is not an explicit mutually exclusive picker");
+        if(premium && (!singleChoice || multiChoice || !frontLabel || !silentLabel))throw new AssertionError("Receive mode is not an explicit mutually exclusive picker");
         System.out.println("PASS edition="+args[1]+" BUILD="+values.get("BUILD")+" voice=true forward=true receipt=true redpacket_premium="+premium+" receive_mode="+(args[1].equals("free")?"foreground-auto-open":"single-choice")+" image="+premium+" tablet_premium="+premium+" media_prefetch=true original_download=true keyword_filter_vip_only=true");
     }
 

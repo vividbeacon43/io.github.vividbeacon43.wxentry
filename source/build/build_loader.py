@@ -43,7 +43,7 @@ assert len(list(dex.glob('*.dex')))==1,'Loader must remain one DEX so embedded k
 tests=OUT/'tests';tests.mkdir()
 run([JAVA/'javac.exe','-J-Duser.language=en','-encoding','UTF-8','-cp',str(classes)+os.pathsep+str(runtime),'-d',tests,R/'tests/FrameworkDexOrderTest.java'])
 build=json.loads((R/'build-local/result.json').read_text(encoding='utf-8'))
-check=run([JAVA/'java.exe','-Dwxentry.runtime.jar='+str(optimized),'-cp',os.pathsep.join(map(str,[tests,classes,LIB/'jadx-all.jar'])),'FrameworkDexOrderTest',*[build['editions'][e]['dex'] for e in ['free','plus','vip']]])
+check=run([JAVA/'java.exe','-Dwxentry.runtime.jar='+str(optimized),'-cp',os.pathsep.join(map(str,[tests,classes,LIB/'jadx-all.jar'])),'FrameworkDexOrderTest',*[entry['dex'] for entry in build['editions'].values()]])
 run([JAVA/'javac.exe','-J-Duser.language=en','-encoding','UTF-8','-cp',LIB/'jadx-all.jar','-d',tests,R/'tests/DexRuntimeEnumContractTest.java'])
 enum_check=run([JAVA/'java.exe','-cp',str(tests)+os.pathsep+str(LIB/'jadx-all.jar'),'DexRuntimeEnumContractTest',dex/'classes.dex'])
 main=(R/'loader/Main.java').read_text(encoding='utf-8')

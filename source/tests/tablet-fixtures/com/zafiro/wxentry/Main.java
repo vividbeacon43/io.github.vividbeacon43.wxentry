@@ -1,1 +1,0 @@
-package com.zafiro.wxentry;public class Main {public static boolean paid=true;public static boolean tabletFeatureAllowed(){return paid;}public static java.util.List<String> logs=new java.util.ArrayList<>();public static void log(String value){logs.add(value);}}

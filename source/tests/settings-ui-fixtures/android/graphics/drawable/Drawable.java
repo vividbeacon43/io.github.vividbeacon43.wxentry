@@ -1,1 +1,0 @@
-package android.graphics.drawable;public class Drawable {public android.graphics.Rect bounds=new android.graphics.Rect();public android.graphics.Rect getBounds(){return bounds;}}
