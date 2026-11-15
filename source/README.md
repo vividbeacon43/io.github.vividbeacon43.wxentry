@@ -1,4 +1,4 @@
-# WXEntry 2.29 / v350
+# WXEntry 2.30 / v351
 
 公开源码包含 WXEntry 加载器及 APK 内置的免费版内核。三版均支持聊天长按复读和新群免打扰。
 
@@ -11,4 +11,4 @@ python build/build_kernels.py --free-only --libs <依赖目录>
 python build/build_loader.py --libs <依赖目录>
 ```
 
-两个脚本均支持 `--java-bin` 指定 JDK bin。使用官方 2.28 签名 APK 作为资源基线，运行 `python build/repack_apk.py --help` 查看未签名 APK 打包参数。构建与签名互相独立。
+两个脚本均支持 `--java-bin` 指定 JDK bin。使用官方 2.29 签名 APK 作为资源基线，运行 `python build/repack_apk.py --help` 查看未签名 APK 打包参数。构建与签名互相独立。

@@ -53,6 +53,7 @@ def compile_dex(edition):
     if edition in ['plus','vip']:sources += [ROOT/'kernel/CallToolsRuntime.java',ROOT/'kernel/ImageRecallRuntime.java',ROOT/'kernel/RecallImageCache.java',*[ROOT/'kernel'/n for n in ['SnsForwardCard.java','SnsForwardDraft.java','SnsForwardFiles.java','SnsForwardComposer.java','SnsForwardNative.java','SnsForwardRuntime.java','SnsAdPolicy.java','SnsAdRuntime.java','SnsLocalNative.java','SnsLocalRuntime.java','SnsLocalPicker.java','SnsLocalPanel.java','SnsLocalProjection.java','SnsLocalSurfaces.java','SnsLocalGallery.java','SnsLocalTimes.java','SnsLocalTimesStore.java']]]
     if edition=='vip':
         sources += sorted((ROOT/'kernel').glob('SnsSchedule*.java'))
+        sources += sorted((ROOT/'kernel').glob('SnsAutoLike*.java'))
         sources += [ROOT/'kernel'/name for name in ('ReadInferenceRuntime.java','ReadReplyPolicy.java')]
     stub=ROOT/'tests/tablet-fixtures/com/zafiro/wxentry/Main.java'
     if edition != 'free':
@@ -174,6 +175,8 @@ for cls,name in [('SnsLocalDataTest','local_moments_immutable_codec'),('SnsLocal
     checks[name]=run([JAVA,'-cp',local_tests,'com.zafiro.wxentry.kernel.'+cls,OUT]);print(checks[name],flush=True)
 run([JAVAC,'-encoding','UTF-8','-source','8','-target','8','-nowarn','-d',moments_tests,*list((ROOT/'tests/moments-fixtures').rglob('*.java')),*[ROOT/'kernel'/n for n in ['MomentsConfig.java','MomentsSettings.java','SnsAdPolicy.java','SnsAdRuntime.java','ReceiptConfig.java']],ROOT/'tests/MomentsFeatureTest.java'])
 checks['moments_switches_and_native_ad_filter']=run([JAVA,'-cp',moments_tests,'com.zafiro.wxentry.kernel.MomentsFeatureTest',OUT]);print(checks['moments_switches_and_native_ad_filter'],flush=True)
+run([JAVAC,'-encoding','UTF-8','-source','8','-target','8','-nowarn','-d',moments_tests,ROOT/'kernel/ReceiptConfig.java',ROOT/'kernel/SnsAutoLikeConfig.java',ROOT/'tests/SnsAutoLikeConfigTest.java'])
+checks['moments_auto_like_policy']=run([JAVA,'-cp',moments_tests,'com.zafiro.wxentry.kernel.SnsAutoLikeConfigTest']);print(checks['moments_auto_like_policy'],flush=True)
 sns_tests=OUT/'sns-draft-test-classes';sns_tests.mkdir()
 run([JAVAC,'-encoding','UTF-8','-source','8','-target','8','-nowarn','-d',sns_tests,ROOT/'tests/sns-fixtures/android/content/Intent.java',*[ROOT/'kernel'/n for n in ['SnsForwardCard.java','SnsForwardDraft.java','SnsForwardFiles.java','SnsForwardComposer.java']],ROOT/'tests/SnsForwardDraftTest.java'])
 checks['sns_forward_draft_preview_only']=run([JAVA,'-cp',sns_tests,'com.zafiro.wxentry.kernel.SnsForwardDraftTest',OUT]);print(checks['sns_forward_draft_preview_only'],flush=True)

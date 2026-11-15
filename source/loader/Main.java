@@ -69,8 +69,8 @@ public class Main implements IXposedHookLoadPackage {
     static final String URL_MANIFEST = BASE + "kernel/manifest";
     static final String URL_KERNEL   = BASE + "kernel/download";
     // === 1.43：模块 APK 自身更新 + 内核自动更新/回滚 ===
-    static final int MY_VC = 129;                       // 由 release.py 打包时改写
-    static final String MY_VN = "2.29";
+    static final int MY_VC = 130;                       // 由 release.py 打包时改写
+    static final String MY_VN = "2.30";
     static final String URL_APK_MANIFEST = BASE + "apk.json";
     static final String URL_APK = BASE + "wxentry.apk";
     static final String APK_PENDING = DIR + "apk.pending";
@@ -122,6 +122,23 @@ public class Main implements IXposedHookLoadPackage {
         }
     }
     public static String currentKernelEdition() { return DELIVERY.edition(licField("token")); }
+    public static String momentsAutoLikePermit(String nonce, String accountDigest) {
+        String account = licField("wxid");
+        String token = licField("token");
+        Context context = APP_CTX_REF;
+        if (nonce == null || !nonce.matches("[0-9a-f]{32}") || account == null || token == null || context == null
+                || !sha256Hex(account.getBytes(java.nio.charset.StandardCharsets.UTF_8)).equals(accountDigest)
+                || !"vip".equals(RUNNING_EDITION) || !"vip".equals(currentKernelEdition())
+                || !signedByMe(context)) return "";
+        try {
+            String version = runningKernelVersion();
+            org.json.JSONObject request = new org.json.JSONObject().put("token", token)
+                    .put("apk_v", MY_VC).put("kernel", version).put("nonce", nonce);
+            String response = new String(channelPost(BASE + "moments/auto-like/permit", request.toString()), "UTF-8");
+            if (!token.equals(licField("token")) || !version.equals(runningKernelVersion())) return "";
+            return MY_VC + "|" + response;
+        } catch (Exception failure) { return ""; }
+    }
     public static String editionName(String edition) { return EditionPolicy.name(edition); }
     public static String imageFeatureEnabledFor(String runningEdition) {
         String authorized = currentKernelEdition();

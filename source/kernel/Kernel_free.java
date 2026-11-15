@@ -28,7 +28,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "350";
+    static final String BUILD = "351";
     public static final String EDITION = "free";
     static final boolean RP_PREMIUM_EDITION = false;
     static final boolean TABLET_PREMIUM_EDITION = false;
@@ -6028,7 +6028,6 @@ static boolean wxVersionOk(Object actObj) {
             addMenuAction(rows, MenuAction.DONATE, "打赏");
             addMenuAction(rows, MenuAction.ANNOUNCEMENTS, "更新公告");
             for (MenuCategory page : MenuCategory.values()) {
-                if(page==MenuCategory.MOMENTS&&!momentsPremiumEnabled())continue;
                 rows.add(new MenuEntry(null, page, menuCategoryTitle(page)));
             }
             addMenuAction(rows, MenuAction.RESTART, "重启微信");
@@ -6055,11 +6054,11 @@ static boolean wxVersionOk(Object actObj) {
                 addMenuAction(rows, MenuAction.RP_DELAY, "");
                 break;
             case MOMENTS:
+                addMenuAction(rows, MenuAction.SNS_TOGGLE, "");
                 if(momentsPremiumEnabled()){addMenuAction(rows,MenuAction.SNS_FORWARD,"");addMenuAction(rows,MenuAction.SNS_AD_BLOCK,"");addMenuAction(rows,MenuAction.SNS_LOCAL_LIKES,"");addMenuAction(rows,MenuAction.SNS_LOCAL_COMMENTS,"");addMenuAction(rows,MenuAction.SNS_LOCAL_PRESETS,"伪评论内容预设");addMenuAction(rows,MenuAction.SNS_LOCAL_CLEAR,"清空本地互动记录");}
                 break;
             case ANTI_RECALL:
                 addMenuAction(rows, MenuAction.ANTI_TOGGLE, "");
-                addMenuAction(rows, MenuAction.SNS_TOGGLE, "");
                 break;
             case EXPERIMENTAL:
                 if (SCAN_CAMERA_READY) addMenuAction(rows, MenuAction.SCAN_CAMERA, "模拟相机扫码");
