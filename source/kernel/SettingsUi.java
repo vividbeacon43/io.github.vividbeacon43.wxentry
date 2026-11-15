@@ -11,7 +11,7 @@ import android.graphics.Paint;
 
 /** Shared native switch rows. Explicit drawables avoid host-app theme overrides. */
 final class SettingsUi {
-    static final int BLUE=0xFF2979FF,ROSE=0xFFA82D61,GRAY=0xFFE4D3DB;
+    static final int BLUE=0xFF2979FF;
     static final int SWITCH_WIDTH=36,SWITCH_HEIGHT=20,THUMB_SIZE=16;
     static final int CONTROL_SIZE=48,CONTROL_GAP=12,ROW_HEIGHT=64;
     interface Change { boolean set(boolean checked); } // Return the saved state, including on failure.
@@ -47,11 +47,12 @@ final class SettingsUi {
             int layer=canvas.saveLayerAlpha(0,0,getWidth(),getHeight(),0);
             super.onDraw(canvas);canvas.restoreToCount(layer);
             float position=Math.max(0,Math.min(1,(getThumbDrawable().getBounds().centerX()-(x+9*d))/(18*d)));
-            boolean checked=isChecked(),enabled=isEnabled();
+            float progress = getLayoutDirection() == View.LAYOUT_DIRECTION_RTL ? 1 - position : position;
+            boolean enabled=isEnabled();
             MenuPalette palette = menuPalette != null ? menuPalette : dark(getContext()) ? MenuPalette.DARK : MenuPalette.LIGHT;
             boolean night = palette == MenuPalette.DARK;
-            int track = checked ? palette.switchOn : palette.switchOff;
-            int border = checked ? palette.switchOnEdge : palette.switchOffEdge;
+            int track = mix(palette.switchOff, palette.switchOn, progress);
+            int border = mix(palette.switchOffEdge, palette.switchOnEdge, progress);
             if(!enabled) { track=night?0xFF505B6B:0xFFDDE2E8;border=night?0xFF7C899B:0xFFAAB3C0; }
             fill.setStyle(Paint.Style.FILL);fill.setColor(track);
             fill.setShadowLayer(0.65f*d,0,0.5f*d,0x24000000);
@@ -64,15 +65,26 @@ final class SettingsUi {
             edge.setColor(night?0xFFC2CAD5:0xFFB7C0CD);edge.setStrokeWidth(0.65f*d);
             canvas.drawCircle(cx,cy,radius-0.35f*d,edge);
         }
+
+        private static int mix(int start, int end, float fraction) {
+            int color = 0xFF000000;
+            for (int shift = 0; shift < 24; shift += 8) {
+                int from = start >> shift & 255;
+                int to = end >> shift & 255;
+                color |= Math.round(from + (to - from) * fraction) << shift;
+            }
+            return color;
+        }
     }
     static CompactSwitch control(Context c) {
         CompactSwitch s=new CompactSwitch(c);s.setText("");s.setShowText(false);s.setSplitTrack(false);
         s.setButtonDrawable((android.graphics.drawable.Drawable)null);s.setBackground(null);
         s.setThumbTintList(null);s.setTrackTintList(null);
+        MenuPalette palette = dark(c) ? MenuPalette.DARK : MenuPalette.LIGHT;
         StateListDrawable track=new StateListDrawable();
-        track.addState(new int[]{android.R.attr.state_enabled,android.R.attr.state_checked},shape(c,ROSE,SWITCH_WIDTH,SWITCH_HEIGHT));
-        track.addState(new int[]{android.R.attr.state_enabled},shape(c,GRAY,SWITCH_WIDTH,SWITCH_HEIGHT));
-        track.addState(new int[]{},shape(c,GRAY,SWITCH_WIDTH,SWITCH_HEIGHT));
+        track.addState(new int[]{android.R.attr.state_enabled,android.R.attr.state_checked},shape(c,palette.switchOn,SWITCH_WIDTH,SWITCH_HEIGHT));
+        track.addState(new int[]{android.R.attr.state_enabled},shape(c,palette.switchOff,SWITCH_WIDTH,SWITCH_HEIGHT));
+        track.addState(new int[]{},shape(c,palette.switchOff,SWITCH_WIDTH,SWITCH_HEIGHT));
         s.setTrackDrawable(track);s.setThumbDrawable(shape(c,0xFFFFFFFF,18,THUMB_SIZE));
         s.setSwitchMinWidth(dp(c,SWITCH_WIDTH));s.setSwitchPadding(0);s.setThumbTextPadding(0);
         int inset=dp(c,(CONTROL_SIZE-SWITCH_WIDTH)/2);

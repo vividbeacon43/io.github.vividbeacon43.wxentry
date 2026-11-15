@@ -28,7 +28,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "349";
+    static final String BUILD = "350";
     public static final String EDITION = "free";
     static final boolean RP_PREMIUM_EDITION = false;
     static final boolean TABLET_PREMIUM_EDITION = false;
@@ -6078,8 +6078,10 @@ static boolean wxVersionOk(Object actObj) {
     }
     static int menuPageHeight(Activity act, int rows, MenuCategory category) {
         android.util.DisplayMetrics metrics = act.getResources().getDisplayMetrics();
-        int estimate = SettingsUi.dp(act, Math.max(1, rows) * (category == null ? FeatureMenuUi.ROW_HEIGHT + FeatureMenuUi.ROW_GAP : 64));
-        return Math.min(estimate, (int) (metrics.heightPixels * 0.48f));
+        int estimate = SettingsUi.dp(act, Math.max(1, rows)
+                * (category == null ? FeatureMenuUi.ROW_HEIGHT + 1 : 58));
+        int available = Math.max(SettingsUi.dp(act, 115), metrics.heightPixels - SettingsUi.dp(act, 200));
+        return Math.min(estimate, Math.min(available, (int) (metrics.heightPixels * 0.61f)));
     }
     static void refreshMenuLabel(MenuEntry item) {
         switch (item.action) {
@@ -6220,33 +6222,9 @@ static boolean wxVersionOk(Object actObj) {
             final MenuCategory[] page = new MenuCategory[] { null };
             final java.util.ArrayList<MenuEntry> items = menuPageEntries(null);
 
-            final android.widget.LinearLayout head = FeatureMenuUi.column(act);
-            FeatureMenuUi.pad(head, 16, 9);
-            final android.widget.TextView tTitle = FeatureMenuUi.text(act, "模块设置", 21, FeatureMenuUi.Tone.INK);
-            tTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-            head.addView(tTitle);
-            final android.widget.TextView tVer = FeatureMenuUi.text(act,
-                    verPrefix() + localKernelVer() + " · " + editionLabel(), 12, FeatureMenuUi.Tone.MUTED);
-            head.addView(tVer);
-            final android.widget.TextView update = FeatureMenuUi.text(act, updateMenuLabel(), 14, FeatureMenuUi.Tone.ROSE);
-            update.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-            update.setMinHeight(SettingsUi.dp(act, 44));
-            update.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            update.setOnClickListener(new android.view.View.OnClickListener() {
-                public void onClick(android.view.View v) { openUpdateEntry(act); }
-            });
-            FeatureMenuUi.card(update, true, true);
-            FeatureMenuUi.pad(update, 12, 4);
-            android.widget.LinearLayout.LayoutParams updateParams = new android.widget.LinearLayout.LayoutParams(-1, -2);
-            updateParams.topMargin = SettingsUi.dp(act, 6);
-            head.addView(update, updateParams);
-            if (SERVER_REPLY != null && !SERVER_REPLY.isEmpty()) {
-                android.widget.TextView reply = FeatureMenuUi.text(act, "官方回复：" + SERVER_REPLY, 12, FeatureMenuUi.Tone.MUTED);
-                reply.setMaxLines(2);
-                reply.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                reply.setPadding(0, SettingsUi.dp(act, 6), 0, 0);
-                head.addView(reply);
-            }
+            final FeatureMenuUi.MenuHeader head = new FeatureMenuUi.MenuHeader(act,
+                    verPrefix() + localKernelVer() + " · " + editionLabel(), updateMenuLabel(), SERVER_REPLY);
+            head.update.setOnClickListener(view -> openUpdateEntry(act));
 
             final Runnable[] renderMenu=new Runnable[1];
             final android.widget.ArrayAdapter<MenuEntry> listAd =
@@ -6269,7 +6247,9 @@ static boolean wxVersionOk(Object actObj) {
                             String label = entry.category == null
                                     ? (entry.action == MenuAction.CHECK_UPDATE ? updateMenuLabel() : entry.label)
                                     : menuCategoryTitle(entry.category);
-                            return FeatureMenuUi.row(act, label, entry.category != null,
+                            String icon = entry.category != null ? entry.category.name()
+                                    : page[0] == null ? entry.action.name() : null;
+                            return FeatureMenuUi.row(act, label, icon,
                                     entry.action == MenuAction.CHECK_UPDATE && callMainStr("apkPendingName") != null);
                         }
                     };
@@ -6279,17 +6259,16 @@ static boolean wxVersionOk(Object actObj) {
             lv.setVerticalScrollBarEnabled(true);
             lv.setScrollbarFadingEnabled(false);
             lv.setSelector(android.R.color.transparent);
-            lv.setPadding(SettingsUi.dp(act, 16), 0, SettingsUi.dp(act, 16), 0);
+            lv.setOverScrollMode(android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS);
 
-            final android.widget.TextView hint = FeatureMenuUi.text(act, "", 12, FeatureMenuUi.Tone.ROSE);
+            final android.widget.TextView hint = FeatureMenuUi.text(act, "", 12, FeatureMenuUi.Tone.MUTED);
             FeatureMenuUi.wireScrollHint(lv, hint);
             FeatureMenuUi.ThemeLayout box = new FeatureMenuUi.ThemeLayout(act);
             box.addView(head);
             box.addView(lv, new android.widget.LinearLayout.LayoutParams(-1, menuPageHeight(act, items.size(), page[0])));
             box.addView(hint, new android.widget.LinearLayout.LayoutParams(-1, -2));
 
-            final android.app.AlertDialog dlg = FeatureMenuUi.builder(act).setView(box)
-                    .setNegativeButton("关闭", null).create();
+            final android.app.AlertDialog dlg = FeatureMenuUi.builder(act).setView(box).create();
             final MenuCategory[] rendered = new MenuCategory[] { null };
             final Runnable renderPage = new Runnable() {
                 public void run() {
@@ -6300,15 +6279,14 @@ static boolean wxVersionOk(Object actObj) {
                     items.clear();
                     items.addAll(menuPageEntries(page[0]));
                     rendered[0] = page[0];
-                    tTitle.setText(menuCategoryTitle(page[0]));
-                    update.setText(updateMenuLabel());
+                    head.showSection(menuCategoryTitle(page[0]), page[0] != null);
+                    head.update.setText(updateMenuLabel());
                     listAd.notifyDataSetChanged();
                     android.view.ViewGroup.LayoutParams params = lv.getLayoutParams();
                     params.height = menuPageHeight(act, items.size(), page[0]);
                     lv.setLayoutParams(params);
                     lv.setSelectionFromTop(position, offset);
-                    android.widget.Button back = dlg.getButton(android.content.DialogInterface.BUTTON_NEGATIVE);
-                    if (back != null) back.setText(page[0] == null ? "关闭" : "返回");
+                    if (!samePage) FeatureMenuUi.slidePage(head.title, lv, page[0] != null);
                     T("feature menu page=" + (page[0] == null ? "root" : page[0].name()));
                 }
             };
@@ -6325,7 +6303,7 @@ static boolean wxVersionOk(Object actObj) {
                         } else if (row.action != null) {
                             performMenuAction(act, row, renderPage);
                             listAd.notifyDataSetChanged();
-                            tTitle.setText(menuCategoryTitle(page[0]));
+                            head.showSection(menuCategoryTitle(page[0]), page[0] != null);
                         }
                     } catch (Throwable t) { T("menu item err " + t); }
                 }
@@ -6347,20 +6325,21 @@ static boolean wxVersionOk(Object actObj) {
                 }
             });
             dlg.show();
-            box.bind(dlg, null);
+            box.bind(dlg);
             lv.getViewTreeObserver().addOnWindowFocusChangeListener(new android.view.ViewTreeObserver.OnWindowFocusChangeListener() {
                 public void onWindowFocusChanged(boolean focused) {
                     if (!focused) return;
-                    update.setText(updateMenuLabel());
+                    head.update.setText(updateMenuLabel());
                     if (page[0] == MenuCategory.SUPPORT) listAd.notifyDataSetChanged();
                 }
             });
-            dlg.getButton(android.content.DialogInterface.BUTTON_NEGATIVE).setOnClickListener(new android.view.View.OnClickListener() {
-                public void onClick(android.view.View view) {
-                    if (page[0] == null) dlg.dismiss();
-                    else { page[0] = null; renderPage.run(); }
-                }
+            head.close.setOnClickListener(view -> dlg.dismiss());
+            head.back.setOnClickListener(view -> {
+                if (page[0] == null) return;
+                page[0] = null;
+                renderPage.run();
             });
+            head.showSection(menuCategoryTitle(null), false);
             MENU_SHOW_COUNT++;
             T("feature menu shown");
         } catch (Throwable t) { T("feature menu err " + t); }
