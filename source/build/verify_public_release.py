@@ -5,7 +5,7 @@ from zipfile import ZipFile
 import re
 
 PAID = re.compile(
-    r'(?:Kernel_(?:vip|plus)|PaidTabletEntry|TabletModeHooks|TabletModeStore|TabletLoginEntry|'
+    r'(?:Kernel_(?:vip|plus)|FakeBalance|AdSkip|PaidTabletEntry|TabletModeHooks|TabletModeStore|TabletLoginEntry|'
     r'ExperimentalUi|WechatRestartPlan|RedPacket(?:Native|Runtime|Engine|Settings|Policy)|'
     r'Transfer(?:Runtime|Native|Engine)|Sns(?:Schedule|Forward|Ad|LocalRuntime|LocalNative)|'
     r'ImageRecallRuntime|RecallImageCache|CallToolsRuntime|ReadInferenceRuntime|ReadReplyPolicy)'

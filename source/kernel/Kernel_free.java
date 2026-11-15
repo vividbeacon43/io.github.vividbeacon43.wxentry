@@ -28,7 +28,7 @@ public class Kernel {
         return MENU_SHOW_COUNT > before;
     }
 
-    static final String BUILD = "289";
+    static final String BUILD = "349";
     public static final String EDITION = "free";
     static final boolean RP_PREMIUM_EDITION = false;
     static final boolean TABLET_PREMIUM_EDITION = false;
@@ -61,7 +61,7 @@ public class Kernel {
     static final String RP_DELAY_PATH = WXDIR + "redpacket.delay";
     static final String RP_TOAST_OFF_PATH = WXDIR + "redpacket.toast.off";
     static final String NEWROOM_ON_PATH = WXDIR + "newroom.mute.on";
-    static final String NEWROOM_NOTIFY_PATH = WXDIR + "newroom.notify";
+    static final String MESSAGE_REPEAT_OFF_PATH = WXDIR + "message.repeat.off";
     static volatile android.content.Context APP_CTX = null;
     static volatile java.lang.ref.WeakReference<Activity> CUR_ACT = null;
     static final java.util.HashSet<String> RP_SEEN = new java.util.HashSet<String>();
@@ -483,6 +483,8 @@ static boolean wxVersionOk(Object actObj) {
         try { MediaRecallRuntime.start(cl); } catch (Throwable t) { T("ARMEDIA install-error " + t.getClass().getSimpleName()); }
         try { OriginalImageRuntime.start(cl); } catch (Throwable t) { T("ARORIGINAL install-error " + t.getClass().getSimpleName()); }
         try { VoiceForwardRuntime.start(cl); } catch (Throwable t) { T("ARVF install-error " + t.getClass().getSimpleName()); }
+        try { MessageRepeatRuntime.start(cl); } catch (Throwable t) { T("ARREPEAT unavailable " + t.getClass().getSimpleName()); }
+        try { NewRoomMuteRuntime.start(cl); } catch (Throwable t) { T("newroom: unavailable " + t.getClass().getSimpleName()); }
         try { VoiceTextRuntime.start(cl); } catch (Throwable t) { T("ARVOICETEXT unavailable " + t.getClass().getSimpleName()); }
         try { hookMessageWrites(cl); } catch (Throwable t) { T("msg write hook err " + t); }
         try { hookAddMsg(cl); } catch (Throwable t) { T("addmsg hook err " + t); }
@@ -873,22 +875,6 @@ static boolean wxVersionOk(Object actObj) {
                                         }
                                     } catch (Throwable tt) {}
 
-                                    // 新加群聊自动免打扰
-                                    try {
-                                        if (t != null && (t.intValue() & 0xFFFF) == 10000
-                                                && "message".equals(table)) {
-                                            String tc = cv.getAsString("talker");
-                                            String cc = cv.getAsString("content");
-                                            if (tc != null && tc.endsWith("@chatroom") && cc != null
-                                                    && cc.contains("\u52a0\u5165\u7fa4\u804a")
-                                                    && (cc.contains("\u4f60") || cc.contains("\u60a8"))) {
-                                                T("newroom: joined " + tc + " :: " + brief(cc));
-                                                if (new java.io.File(NEWROOM_ON_PATH).exists())
-                                                    muteRoom(tc, notifyMsgValue());
-                                                else T("newroom: switch off");
-                                            }
-                                        }
-                                    } catch (Throwable tt) { T("newroom err " + tt); }
                                     // Native callbacks own success notification/replies; text is not proof of receipt.
                                     if (t != null && (t.intValue() & 0xFFFF) == 10000) {
                                         String sc = cv.getAsString("content");
@@ -1700,32 +1686,6 @@ static boolean wxVersionOk(Object actObj) {
                     T("biz repair done rows=" + n + " off=" + BIZ_OFF.size());
                 } catch (Throwable t) { T("biz repair err " + t); }
                 toastMain("已收回 " + n + " 个公众号会话");
-            }
-        }).start();
-    }
-
-    static int notifyMsgValue() {
-        try {
-            String s = readText(NEWROOM_NOTIFY_PATH);
-            if (s != null && s.trim().length() > 0) return Integer.parseInt(s.trim());
-        } catch (Throwable t) {}
-        return 0;   // 0 = 免打扰（微信内部 notifyMsg = isMute^1，免打扰时发 0）
-    }
-
-    static void muteRoom(final String roomId, final int notifyMsg) {
-        new Thread(new Runnable() {
-            public void run() {
-                try {
-                    ClassLoader cl = APP_CL;
-                    Object svc = XposedHelpers.callStaticMethod(
-                            XposedHelpers.findClass("fi5.n0", cl), "c",
-                            XposedHelpers.findClass("kg0.e", cl));
-                    Object ops = XposedHelpers.callMethod(svc, "Ej", roomId);
-                    Object task = XposedHelpers.callMethod(ops, "h", roomId,
-                            Integer.valueOf(notifyMsg), Integer.valueOf(0));
-                    XposedHelpers.callMethod(task, "b");
-                    T("newroom: MUTED " + roomId + " notify=" + notifyMsg);
-                } catch (Throwable t) { T("newroom mute err " + t); }
             }
         }).start();
     }
@@ -6036,7 +5996,7 @@ static boolean wxVersionOk(Object actObj) {
     // Each visible row owns its action; positions never determine behavior.
     enum MenuAction {
         MARK_READ, CLEAR_CHATS, UNFOLLOW_BIZ, RP_GROUPS, RP_TOGGLE, RP_RECEIVE_MODE, RP_DELAY, ANTI_TOGGLE,
-        REALNAME_TOGGLE, ORIGINAL_TOGGLE, NEWROOM_TOGGLE, CHECK_UPDATE, WISH,
+        REALNAME_TOGGLE, ORIGINAL_TOGGLE, NEWROOM_TOGGLE, MESSAGE_REPEAT_TOGGLE, CHECK_UPDATE, WISH,
         SNS_TOGGLE, RESTART, DIAGNOSTICS, ACTIVATION, DONATE, ANNOUNCEMENTS, SCAN_CAMERA, TABLET_MODE, TABLET_QR, ORIGINAL_DOWNLOAD, ORIGINAL_LISTS, SNS_FORWARD, SNS_AD_BLOCK, SNS_LOCAL_LIKES, SNS_LOCAL_COMMENTS, SNS_LOCAL_PRESETS, SNS_LOCAL_CLEAR, GAME_EMOJI, AUTO_VOICE_TEXT
     }
     enum MenuCategory {
@@ -6068,7 +6028,6 @@ static boolean wxVersionOk(Object actObj) {
             addMenuAction(rows, MenuAction.DONATE, "打赏");
             addMenuAction(rows, MenuAction.ANNOUNCEMENTS, "更新公告");
             for (MenuCategory page : MenuCategory.values()) {
-                if (page == MenuCategory.EXPERIMENTAL && !SCAN_CAMERA_READY && !tabletFeatureAvailable()) continue;
                 if(page==MenuCategory.MOMENTS&&!momentsPremiumEnabled())continue;
                 rows.add(new MenuEntry(null, page, menuCategoryTitle(page)));
             }
@@ -6078,6 +6037,7 @@ static boolean wxVersionOk(Object actObj) {
         switch (category) {
             case CHAT:
                 addMenuAction(rows, MenuAction.MARK_READ, "一键已读");
+                if (MessageRepeatRuntime.available()) addMenuAction(rows, MenuAction.MESSAGE_REPEAT_TOGGLE, "消息复读");
                 addMenuAction(rows, MenuAction.CLEAR_CHATS, "清空聊天列表");
                 addMenuAction(rows, MenuAction.UNFOLLOW_BIZ, "公众号取关");
                 addMenuAction(rows, MenuAction.REALNAME_TOGGLE, "");
@@ -6169,6 +6129,7 @@ static boolean wxVersionOk(Object actObj) {
             case ORIGINAL_DOWNLOAD: ReceiptSettings.toggle(act,ReceiptConfig.Feature.ORIGINAL_IMAGE,refresh); OriginalImageRuntime.settingsChanged(); break;
             case ORIGINAL_LISTS: ReceiptSettings.lists(act,ReceiptConfig.Feature.ORIGINAL_IMAGE); break;
             case NEWROOM_TOGGLE: toggleFlag(NEWROOM_ON_PATH, "新群免打扰"); break;
+            case MESSAGE_REPEAT_TOGGLE: toggleFlag(MESSAGE_REPEAT_OFF_PATH, "消息复读", true); break;
             case SNS_TOGGLE: toggleFlag(WXDIR + "sns.keep.del.on", "朋友圈防撤回"); break;
             case SNS_FORWARD:setMomentsToggle(act,MomentsConfig.Feature.FORWARD,!MomentsSettings.configured(MomentsConfig.Feature.FORWARD));break;
             case SNS_AD_BLOCK:setMomentsToggle(act,MomentsConfig.Feature.AD_BLOCK,!MomentsSettings.configured(MomentsConfig.Feature.AD_BLOCK));break;
@@ -6215,6 +6176,7 @@ static boolean wxVersionOk(Object actObj) {
             case ORIGINAL_TOGGLE:return !f(ORIG_OFF_PATH);
             case ORIGINAL_DOWNLOAD:return ReceiptSettings.enabled(ReceiptConfig.Feature.ORIGINAL_IMAGE);
             case NEWROOM_TOGGLE:return f(NEWROOM_ON_PATH);
+            case MESSAGE_REPEAT_TOGGLE:return !f(MESSAGE_REPEAT_OFF_PATH);
             case SNS_TOGGLE:return f(WXDIR+"sns.keep.del.on");
             case SNS_FORWARD:return snsForwardEnabled();
             case SNS_AD_BLOCK:return snsAdBlockEnabled();
